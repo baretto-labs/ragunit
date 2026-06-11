@@ -499,6 +499,139 @@ class OllamaJudgeTest {
         assertThat(verdict.score().value()).isEqualTo(SCORE_09);
     }
 
+    // --- builder ---
+
+    @Test
+    void should_useCustomFaithfulnessPrompt_when_configuredViaBuilder() {
+        AtomicReference<String> capturedBody = new AtomicReference<>();
+        String json = "{\"score\": 0.9, \"rationale\": \"OK.\", \"statements\": []}";
+        registerCapturingHandler(ollamaJsonResponse(json), capturedBody);
+
+        OllamaJudge customJudge = OllamaJudge.builder()
+                .model(MODEL)
+                .host("localhost")
+                .port(port)
+                .faithfulnessPrompt(ctx -> "CUSTOM_FAITHFULNESS_PROMPT for " + ctx.question().text())
+                .build();
+
+        customJudge.evaluateGeneration(QUESTION, CONTEXT, ANSWER);
+
+        assertThat(capturedBody.get()).contains("CUSTOM_FAITHFULNESS_PROMPT for");
+    }
+
+    @Test
+    void should_useDefaultPrompts_when_builderHasNoCustomTemplate() {
+        AtomicReference<String> capturedBody = new AtomicReference<>();
+        String json = "{\"score\": 0.9, \"rationale\": \"OK.\", \"statements\": []}";
+        registerCapturingHandler(ollamaJsonResponse(json), capturedBody);
+
+        OllamaJudge defaultJudge = OllamaJudge.builder()
+                .model(MODEL)
+                .host("localhost")
+                .port(port)
+                .build();
+
+        defaultJudge.evaluateRetrieval(QUESTION, CONTEXT);
+
+        assertThat(capturedBody.get()).contains("Rate how relevant");
+    }
+
+    @Test
+    void should_useCustomTemplateForAnyMetric_when_configuredViaGenericBuilderMethod() {
+        AtomicReference<String> capturedBody = new AtomicReference<>();
+        String json = "{\"score\": 0.9, \"rationale\": \"OK.\", \"statements\": []}";
+        registerCapturingHandler(ollamaJsonResponse(json), capturedBody);
+
+        OllamaJudge customJudge = OllamaJudge.builder()
+                .model(MODEL)
+                .host("localhost")
+                .port(port)
+                .prompt(MetricType.CONTEXT_RECALL, ctx -> "CUSTOM_RECALL_PROMPT")
+                .build();
+
+        customJudge.evaluateContextRecall(QUESTION, CONTEXT, REFERENCE);
+
+        assertThat(capturedBody.get()).contains("CUSTOM_RECALL_PROMPT");
+    }
+
+    @Test
+    void should_useCustomAnswerRelevancyPrompt_when_configuredViaBuilder() {
+        AtomicReference<String> capturedBody = new AtomicReference<>();
+        String json = "{\"score\": 0.9, \"rationale\": \"OK.\", \"statements\": []}";
+        registerCapturingHandler(ollamaJsonResponse(json), capturedBody);
+
+        OllamaJudge customJudge = OllamaJudge.builder()
+                .model(MODEL)
+                .host("localhost")
+                .port(port)
+                .answerRelevancyPrompt(ctx -> "CUSTOM_RELEVANCY_PROMPT")
+                .build();
+
+        customJudge.evaluateAnswerRelevancy(QUESTION, ANSWER);
+
+        assertThat(capturedBody.get()).contains("CUSTOM_RELEVANCY_PROMPT");
+    }
+
+    @Test
+    void should_useCustomFactualCorrectnessPrompt_when_configuredViaBuilder() {
+        AtomicReference<String> capturedBody = new AtomicReference<>();
+        String json = "{\"score\": 0.9, \"precision\": 0.9, \"recall\": 0.9,"
+                + " \"rationale\": \"OK.\", \"statements\": []}";
+        registerCapturingHandler(ollamaJsonResponse(json), capturedBody);
+
+        OllamaJudge customJudge = OllamaJudge.builder()
+                .model(MODEL)
+                .host("localhost")
+                .port(port)
+                .factualCorrectnessPrompt(ctx -> "CUSTOM_FACTUAL_PROMPT")
+                .build();
+
+        assertThat(customJudge.evaluateFactualCorrectness(QUESTION, ANSWER, REFERENCE)).isNotNull();
+        assertThat(capturedBody.get()).contains("CUSTOM_FACTUAL_PROMPT");
+    }
+
+    @Test
+    void should_throwNullPointerException_when_builderHasNoModel() {
+        assertThatThrownBy(() -> OllamaJudge.builder().build())
+                .isInstanceOf(NullPointerException.class)
+                .hasMessageContaining("model");
+    }
+
+    // --- custom templates honored for all metrics ---
+
+    @Test
+    void should_passReferenceInPromptContext_when_evaluatingFactualCorrectness() {
+        AtomicReference<PromptContext> capturedCtx = new AtomicReference<>();
+        String json = "{\"score\": 0.9, \"precision\": 0.9, \"recall\": 0.9,"
+                + " \"rationale\": \"OK.\", \"statements\": []}";
+        registerHandler(ollamaJsonResponse(json));
+
+        OllamaJudge customJudge = new OllamaJudge(MODEL, "localhost", port,
+                Map.of(MetricType.FACTUAL_CORRECTNESS, ctx -> {
+                    capturedCtx.set(ctx);
+                    return "CUSTOM_FACTUAL";
+                }));
+
+        customJudge.evaluateFactualCorrectness(QUESTION, ANSWER, REFERENCE);
+
+        assertThat(capturedCtx.get()).isNotNull();
+        assertThat(capturedCtx.get().reference()).contains(REFERENCE);
+    }
+
+    @Test
+    void should_useCustomTemplate_when_configuredForToolTrajectory() {
+        AtomicReference<String> capturedBody = new AtomicReference<>();
+        String json = "{\"score\": 0.9, \"rationale\": \"OK.\", \"statements\": []}";
+        registerCapturingHandler(ollamaJsonResponse(json), capturedBody);
+
+        OllamaJudge customJudge = new OllamaJudge(MODEL, "localhost", port,
+                Map.of(MetricType.TOOL_TRAJECTORY, ctx -> "CUSTOM_TRAJECTORY_PROMPT"));
+
+        customJudge.evaluateToolTrajectory(QUESTION, TRAJECTORY, ANSWER);
+
+        assertThat(capturedBody.get()).contains("CUSTOM_TRAJECTORY_PROMPT");
+    }
+
     // --- PromptContext.forGeneration (custom GENERATION template) ---
 
     @Test

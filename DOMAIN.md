@@ -65,6 +65,7 @@ Any deviation requires a comment explaining why.
 | **RagTest** | A JUnit 5 tag annotation marking expensive evaluation tests | `@RagTest` annotation |
 | **MetricType** | Enum identifying each evaluation metric; key for JudgePromptTemplate maps | `MetricType` enum |
 | **JudgePromptTemplate** | Functional interface for domain-specific prompt customization per metric | Replaces built-in default prompt |
+| **JudgePromptLibrary** | The library of built-in, versioned judge prompts — one public constant per metric (`FAITHFULNESS_V1`…) | Prompt wording never changes in place; a change ships as a new `_Vn` constant |
 
 ---
 
@@ -96,3 +97,6 @@ These names are banned because they are too generic or violate DDD principles:
 
 ### v0.1 release
 `FactualCorrectnessVerdict` — claim-level F1/precision/recall between Answer and ReferenceAnswer
+
+### v0.2
+`JudgePromptLibrary` — visible, versioned default prompts for every MetricType

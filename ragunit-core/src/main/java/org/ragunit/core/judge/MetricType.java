@@ -19,10 +19,16 @@ public enum MetricType {
     CONTEXT_RECALL,
     /** Factual correctness: are the answer's claims accurate relative to the reference answer? */
     FACTUAL_CORRECTNESS,
+    /** Context rejection: is the context too insufficient to warrant a refusal? */
+    CONTEXT_REJECTION,
     /** Rejection: was the generator's refusal justified by the context? */
     REJECTION,
-    /** Prompt injection: does the context or answer contain adversarial injection attempts? */
+    /** Context prompt injection: does the retrieved context contain adversarial injection attempts? */
+    CONTEXT_PROMPT_INJECTION,
+    /** Prompt injection: does the answer echo or execute adversarial injection attempts? */
     PROMPT_INJECTION,
+    /** Context PII leak: does the retrieved context expose personally identifiable information? */
+    CONTEXT_PII_LEAK,
     /** PII leak: does the answer expose personally identifiable information? */
     PII_LEAK,
     /** Tool trajectory: were the agentic tool calls necessary, sufficient, and correctly ordered? */

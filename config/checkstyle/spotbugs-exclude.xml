@@ -41,12 +41,13 @@
         VA_FORMAT_STRING_USES_NEWLINE: SpotBugs recommends %n over \n in format strings.
         RAGUnit code conventions mandate Java text blocks (JEP 378) for all multi-line strings.
         Text blocks use \n as the natural line separator (UTF-8, not platform-dependent).
-        The prompt builder methods use text blocks with .formatted() — \n here is intentional
+        The prompt templates use text blocks with .formatted() — \n here is intentional
         and correct. Using %n would require abandoning text blocks or ugly workarounds.
+        Covers the judges and JudgePromptLibrary (where all default prompts live).
     -->
     <Match>
         <Bug pattern="VA_FORMAT_STRING_USES_NEWLINE"/>
-        <Class name="~org\.ragunit\..*Judge"/>
+        <Class name="~org\.ragunit\..*Judge.*"/>
     </Match>
 
 </FindBugsFilter>
