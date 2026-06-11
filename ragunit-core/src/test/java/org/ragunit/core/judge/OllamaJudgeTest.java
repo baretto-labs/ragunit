@@ -597,6 +597,37 @@ class OllamaJudgeTest {
                 .hasMessageContaining("model");
     }
 
+    // --- temperature ---
+
+    @Test
+    void should_sendTemperatureZero_when_notConfigured() {
+        AtomicReference<String> capturedBody = new AtomicReference<>();
+        String json = "{\"score\": 0.9, \"rationale\": \"OK.\", \"statements\": []}";
+        registerCapturingHandler(ollamaJsonResponse(json), capturedBody);
+
+        judge().evaluateRetrieval(QUESTION, CONTEXT);
+
+        assertThat(capturedBody.get()).contains("\"temperature\":0.0");
+    }
+
+    @Test
+    void should_sendCustomTemperature_when_configuredViaBuilder() {
+        AtomicReference<String> capturedBody = new AtomicReference<>();
+        String json = "{\"score\": 0.9, \"rationale\": \"OK.\", \"statements\": []}";
+        registerCapturingHandler(ollamaJsonResponse(json), capturedBody);
+
+        OllamaJudge warmJudge = OllamaJudge.builder()
+                .model(MODEL)
+                .host("localhost")
+                .port(port)
+                .temperature(0.7)
+                .build();
+
+        warmJudge.evaluateRetrieval(QUESTION, CONTEXT);
+
+        assertThat(capturedBody.get()).contains("\"temperature\":0.7");
+    }
+
     // --- custom templates honored for all metrics ---
 
     @Test

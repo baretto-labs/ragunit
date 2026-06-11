@@ -3,6 +3,7 @@ package org.ragunit.core.assertion;
 import org.ragunit.core.domain.Document;
 import org.ragunit.core.domain.Question;
 import org.ragunit.core.domain.ReferenceAnswer;
+import org.ragunit.core.domain.ScoreStatistics;
 import org.ragunit.core.domain.Verdict;
 import org.ragunit.core.judge.RagJudge;
 import org.ragunit.core.report.AssertionResult;
@@ -10,13 +11,15 @@ import org.ragunit.core.report.RagReporter;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Supplier;
 
 /**
  * Builder for the Retrieval evaluation flow.
  *
  * <p>Obtain an instance via {@link RagAssert#assertThatContext(List)}.
- * Each method returns {@code this} for chaining. Calling {@link #hasRelevanceScore(double)}
- * triggers the Judge and throws {@link AssertionError} if the score is below the threshold.
+ * Each method returns {@code this} for chaining. Assertion methods trigger the Judge
+ * (once, or {@link #withRuns(int)} times) and throw {@link AssertionError} when the
+ * mean score is below the threshold or the judge is too unstable.
  */
 public final class ContextAssert {
 
@@ -24,6 +27,8 @@ public final class ContextAssert {
     private final List<RagReporter> reporters;
     private Question question;
     private RagJudge judge;
+    private int runs = 1;
+    private double maxStddev = ScoreStatistics.DEFAULT_MAX_STDDEV;
 
     /**
      * Creates a new ContextAssert for the given retrieved documents.
@@ -59,23 +64,53 @@ public final class ContextAssert {
     }
 
     /**
+     * Enables variance control: every subsequent assertion runs the judge
+     * {@code runs} times and asserts on the mean score, failing additionally
+     * when the standard deviation exceeds {@link #withMaxStddev(double)}.
+     *
+     * <p>A single LLM-judge call has ±10–15% variance; 3 to 5 runs turn a
+     * noisy score into a defensible measurement.
+     *
+     * @param runs the number of judge calls per assertion (≥ 1)
+     * @return this, for chaining
+     * @throws IllegalArgumentException if {@code runs < 1}
+     */
+    public ContextAssert withRuns(int runs) {
+        if (runs < 1) {
+            throw new IllegalArgumentException("runs must be >= 1, got " + runs);
+        }
+        this.runs = runs;
+        return this;
+    }
+
+    /**
+     * Sets the maximum acceptable standard deviation across runs
+     * (default {@link ScoreStatistics#DEFAULT_MAX_STDDEV}).
+     *
+     * @param maxStddev the stability bound (≥ 0)
+     * @return this, for chaining
+     * @throws IllegalArgumentException if {@code maxStddev} is negative
+     */
+    public ContextAssert withMaxStddev(double maxStddev) {
+        if (maxStddev < 0) {
+            throw new IllegalArgumentException("maxStddev must be >= 0, got " + maxStddev);
+        }
+        this.maxStddev = maxStddev;
+        return this;
+    }
+
+    /**
      * Asserts that the context relevance score meets the given threshold.
      * Notifies reporters whether the assertion passes or fails.
      *
      * @param threshold minimum acceptable relevance score in [0.0, 1.0]
      * @return this, for chaining
-     * @throws AssertionError if the score is below the threshold
+     * @throws AssertionError if the mean score is below the threshold or the judge is unstable
      */
     public ContextAssert hasRelevanceScore(double threshold) {
-        Objects.requireNonNull(judge, "Call evaluatedBy() before asserting");
-        Objects.requireNonNull(question, "Call forQuestion() before asserting");
-        Verdict verdict = judge.evaluateRetrieval(question, context);
-        boolean passed = verdict.isAboveThreshold(threshold);
-        silentlyReport(new AssertionResult("CONTEXT_RELEVANCE", question, verdict, threshold, passed));
-        if (!passed) {
-            throw new AssertionError(buildMessage("Context relevance", verdict.score().value(), threshold));
-        }
-        return this;
+        requireJudgeAndQuestion();
+        return assertMetric("CONTEXT_RELEVANCE", "Context relevance", threshold,
+                () -> judge.evaluateRetrieval(question, context));
     }
 
     /**
@@ -84,18 +119,12 @@ public final class ContextAssert {
      *
      * @param threshold minimum acceptable rejection-justification score in [0.0, 1.0]
      * @return this, for chaining
-     * @throws AssertionError if the score is below the threshold
+     * @throws AssertionError if the mean score is below the threshold or the judge is unstable
      */
     public ContextAssert correctlyRefusedToAnswer(double threshold) {
-        Objects.requireNonNull(judge, "Call evaluatedBy() before asserting");
-        Objects.requireNonNull(question, "Call forQuestion() before asserting");
-        Verdict verdict = judge.evaluateContextRejection(question, context);
-        boolean passed = verdict.isAboveThreshold(threshold);
-        silentlyReport(new AssertionResult("REJECTION", question, verdict, threshold, passed));
-        if (!passed) {
-            throw new AssertionError(buildMessage("Rejection justification", verdict.score().value(), threshold));
-        }
-        return this;
+        requireJudgeAndQuestion();
+        return assertMetric("REJECTION", "Rejection justification", threshold,
+                () -> judge.evaluateContextRejection(question, context));
     }
 
     /**
@@ -108,19 +137,13 @@ public final class ContextAssert {
      * @param reference the ground-truth answer to compare coverage against
      * @param threshold minimum acceptable recall score in [0.0, 1.0]
      * @return this, for chaining
-     * @throws AssertionError if the score is below the threshold
+     * @throws AssertionError if the mean score is below the threshold or the judge is unstable
      */
     public ContextAssert hasContextRecall(ReferenceAnswer reference, double threshold) {
-        Objects.requireNonNull(judge, "Call evaluatedBy() before asserting");
-        Objects.requireNonNull(question, "Call forQuestion() before asserting");
+        requireJudgeAndQuestion();
         Objects.requireNonNull(reference, "reference");
-        Verdict verdict = judge.evaluateContextRecall(question, context, reference);
-        boolean passed = verdict.isAboveThreshold(threshold);
-        silentlyReport(new AssertionResult("CONTEXT_RECALL", question, verdict, threshold, passed));
-        if (!passed) {
-            throw new AssertionError(buildMessage("Context recall", verdict.score().value(), threshold));
-        }
-        return this;
+        return assertMetric("CONTEXT_RECALL", "Context recall", threshold,
+                () -> judge.evaluateContextRecall(question, context, reference));
     }
 
     /**
@@ -129,18 +152,12 @@ public final class ContextAssert {
      *
      * @param threshold minimum acceptable precision score in [0.0, 1.0]
      * @return this, for chaining
-     * @throws AssertionError if the score is below the threshold
+     * @throws AssertionError if the mean score is below the threshold or the judge is unstable
      */
     public ContextAssert hasContextPrecision(double threshold) {
-        Objects.requireNonNull(judge, "Call evaluatedBy() before asserting");
-        Objects.requireNonNull(question, "Call forQuestion() before asserting");
-        Verdict verdict = judge.evaluateContextPrecision(question, context);
-        boolean passed = verdict.isAboveThreshold(threshold);
-        silentlyReport(new AssertionResult("CONTEXT_PRECISION", question, verdict, threshold, passed));
-        if (!passed) {
-            throw new AssertionError(buildMessage("Context precision", verdict.score().value(), threshold));
-        }
-        return this;
+        requireJudgeAndQuestion();
+        return assertMetric("CONTEXT_PRECISION", "Context precision", threshold,
+                () -> judge.evaluateContextPrecision(question, context));
     }
 
     /**
@@ -148,18 +165,12 @@ public final class ContextAssert {
      *
      * @param threshold minimum acceptable safety score in [0.0, 1.0]
      * @return this, for chaining
-     * @throws AssertionError if the score is below the threshold
+     * @throws AssertionError if the mean score is below the threshold or the judge is unstable
      */
     public ContextAssert isSafeFromPromptInjection(double threshold) {
-        Objects.requireNonNull(judge, "Call evaluatedBy() before asserting");
-        Objects.requireNonNull(question, "Call forQuestion() before asserting");
-        Verdict verdict = judge.evaluateContextPromptInjection(question, context);
-        boolean passed = verdict.isAboveThreshold(threshold);
-        silentlyReport(new AssertionResult("PROMPT_INJECTION", question, verdict, threshold, passed));
-        if (!passed) {
-            throw new AssertionError(buildMessage("Prompt injection safety", verdict.score().value(), threshold));
-        }
-        return this;
+        requireJudgeAndQuestion();
+        return assertMetric("PROMPT_INJECTION", "Prompt injection safety", threshold,
+                () -> judge.evaluateContextPromptInjection(question, context));
     }
 
     /**
@@ -167,18 +178,29 @@ public final class ContextAssert {
      *
      * @param threshold minimum acceptable compliance score in [0.0, 1.0]
      * @return this, for chaining
-     * @throws AssertionError if the score is below the threshold
+     * @throws AssertionError if the mean score is below the threshold or the judge is unstable
      */
     public ContextAssert hasNoPIILeak(double threshold) {
-        Objects.requireNonNull(judge, "Call evaluatedBy() before asserting");
-        Objects.requireNonNull(question, "Call forQuestion() before asserting");
-        Verdict verdict = judge.evaluateContextPIILeak(question, context);
-        boolean passed = verdict.isAboveThreshold(threshold);
-        silentlyReport(new AssertionResult("PII_LEAK", question, verdict, threshold, passed));
+        requireJudgeAndQuestion();
+        return assertMetric("PII_LEAK", "PII leak compliance", threshold,
+                () -> judge.evaluateContextPIILeak(question, context));
+    }
+
+    private ContextAssert assertMetric(String type, String label, double threshold,
+                                       Supplier<Verdict> evaluation) {
+        RepeatedEvaluation evaluated = RepeatedEvaluation.run(runs, evaluation);
+        boolean passed = evaluated.passes(threshold, maxStddev);
+        silentlyReport(new AssertionResult(type, question, evaluated.aggregatedVerdict(),
+                threshold, passed));
         if (!passed) {
-            throw new AssertionError(buildMessage("PII leak compliance", verdict.score().value(), threshold));
+            throw new AssertionError(evaluated.failureMessage(label, threshold, maxStddev));
         }
         return this;
+    }
+
+    private void requireJudgeAndQuestion() {
+        Objects.requireNonNull(judge, "Call evaluatedBy() before asserting");
+        Objects.requireNonNull(question, "Call forQuestion() before asserting");
     }
 
     private void silentlyReport(AssertionResult result) {
@@ -189,9 +211,5 @@ public final class ContextAssert {
                 // Reporters must never interrupt test execution
             }
         }
-    }
-
-    private static String buildMessage(String metric, double actual, double threshold) {
-        return metric + " score " + actual + " is below threshold " + threshold;
     }
 }

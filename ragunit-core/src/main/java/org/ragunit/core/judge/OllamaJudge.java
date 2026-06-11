@@ -50,10 +50,18 @@ public final class OllamaJudge implements RagJudge {
     /** Maximum accepted response body size (1 MB). Guards against runaway responses. */
     private static final int MAX_RESPONSE_BYTES = 1024 * 1024;
 
+    /**
+     * Default sampling temperature. Zero is the recommended setting for an
+     * LLM-as-judge: it minimizes run-to-run variance, making scores as
+     * reproducible as the model allows.
+     */
+    static final double DEFAULT_TEMPERATURE = 0.0;
+
     private final String model;
     private final String baseUrl;
     private final HttpClient httpClient;
     private final Map<MetricType, JudgePromptTemplate> templates;
+    private final double temperature;
 
     /**
      * Creates an OllamaJudge connecting to {@code localhost:11434} with default prompts.
@@ -94,10 +102,16 @@ public final class OllamaJudge implements RagJudge {
      * @param templates custom templates keyed by metric type; missing keys fall back to defaults
      */
     public OllamaJudge(String model, String host, int port, Map<MetricType, JudgePromptTemplate> templates) {
+        this(model, host, port, templates, DEFAULT_TEMPERATURE);
+    }
+
+    private OllamaJudge(String model, String host, int port,
+                        Map<MetricType, JudgePromptTemplate> templates, double temperature) {
         this.model = Objects.requireNonNull(model, "model");
         this.baseUrl = "http://" + Objects.requireNonNull(host, "host") + ":" + port;
         this.httpClient = HttpClient.newHttpClient();
         this.templates = mergeWithDefaults(Objects.requireNonNull(templates, "templates"));
+        this.temperature = temperature;
     }
 
     /**
@@ -243,8 +257,9 @@ public final class OllamaJudge implements RagJudge {
 
     private String buildRequestBody(String prompt) {
         return """
-                {"model":"%s","messages":[{"role":"user","content":"%s"}],"stream":false}\
-                """.formatted(escapeJson(model), escapeJson(prompt));
+                {"model":"%s","messages":[{"role":"user","content":"%s"}],\
+                "stream":false,"options":{"temperature":%s}}\
+                """.formatted(escapeJson(model), escapeJson(prompt), temperature);
     }
 
     private static String extractContent(String responseBody) {
@@ -284,6 +299,7 @@ public final class OllamaJudge implements RagJudge {
         private String model;
         private String host = DEFAULT_HOST;
         private int port = DEFAULT_PORT;
+        private double temperature = DEFAULT_TEMPERATURE;
         private final Map<MetricType, JudgePromptTemplate> prompts = new EnumMap<>(MetricType.class);
 
         private Builder() {
@@ -319,6 +335,21 @@ public final class OllamaJudge implements RagJudge {
          */
         public Builder port(int portNumber) {
             this.port = portNumber;
+            return this;
+        }
+
+        /**
+         * Sets the sampling temperature (defaults to {@code 0.0}).
+         *
+         * <p>Zero is the recommended default for an LLM-as-judge: it minimizes
+         * run-to-run variance. Raise it only to probe judge stability
+         * (e.g. together with {@code withRuns(n)} on the assertion builders).
+         *
+         * @param samplingTemperature the Ollama sampling temperature
+         * @return this, for chaining
+         */
+        public Builder temperature(double samplingTemperature) {
+            this.temperature = samplingTemperature;
             return this;
         }
 
@@ -373,7 +404,7 @@ public final class OllamaJudge implements RagJudge {
          */
         public OllamaJudge build() {
             return new OllamaJudge(Objects.requireNonNull(model, "model is required"),
-                    host, port, prompts);
+                    host, port, prompts, temperature);
         }
     }
 }

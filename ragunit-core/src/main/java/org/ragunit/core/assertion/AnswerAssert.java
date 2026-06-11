@@ -5,6 +5,8 @@ import org.ragunit.core.domain.Document;
 import org.ragunit.core.domain.FactualCorrectnessVerdict;
 import org.ragunit.core.domain.Question;
 import org.ragunit.core.domain.ReferenceAnswer;
+import org.ragunit.core.domain.Score;
+import org.ragunit.core.domain.ScoreStatistics;
 import org.ragunit.core.domain.ToolCall;
 import org.ragunit.core.domain.Verdict;
 import org.ragunit.core.judge.RagJudge;
@@ -13,12 +15,15 @@ import org.ragunit.core.report.RagReporter;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * Builder for the Generation evaluation flow.
  *
  * <p>Obtain an instance via {@link RagAssert#assertThatAnswer(Answer)}.
- * Each assertion method calls the judge independently — one LLM call per metric.
+ * Each assertion method calls the judge independently — one LLM call per metric,
+ * multiplied by {@link #withRuns(int)} when variance control is enabled.
  */
 public final class AnswerAssert {
 
@@ -28,6 +33,8 @@ public final class AnswerAssert {
     private Question question;
     private RagJudge judge;
     private ReferenceAnswer reference;
+    private int runs = 1;
+    private double maxStddev = ScoreStatistics.DEFAULT_MAX_STDDEV;
 
     /**
      * Creates a new AnswerAssert for the given answer.
@@ -85,23 +92,53 @@ public final class AnswerAssert {
     }
 
     /**
+     * Enables variance control: every subsequent assertion runs the judge
+     * {@code runs} times and asserts on the mean score, failing additionally
+     * when the standard deviation exceeds {@link #withMaxStddev(double)}.
+     *
+     * <p>A single LLM-judge call has ±10–15% variance; 3 to 5 runs turn a
+     * noisy score into a defensible measurement.
+     *
+     * @param runs the number of judge calls per assertion (≥ 1)
+     * @return this, for chaining
+     * @throws IllegalArgumentException if {@code runs < 1}
+     */
+    public AnswerAssert withRuns(int runs) {
+        if (runs < 1) {
+            throw new IllegalArgumentException("runs must be >= 1, got " + runs);
+        }
+        this.runs = runs;
+        return this;
+    }
+
+    /**
+     * Sets the maximum acceptable standard deviation across runs
+     * (default {@link ScoreStatistics#DEFAULT_MAX_STDDEV}).
+     *
+     * @param maxStddev the stability bound (≥ 0)
+     * @return this, for chaining
+     * @throws IllegalArgumentException if {@code maxStddev} is negative
+     */
+    public AnswerAssert withMaxStddev(double maxStddev) {
+        if (maxStddev < 0) {
+            throw new IllegalArgumentException("maxStddev must be >= 0, got " + maxStddev);
+        }
+        this.maxStddev = maxStddev;
+        return this;
+    }
+
+    /**
      * Asserts that the answer is faithful to the given context.
      *
      * @param threshold minimum acceptable faithfulness score in [0.0, 1.0]
      * @return this, for chaining
-     * @throws AssertionError if the score is below the threshold
+     * @throws AssertionError if the mean score is below the threshold or the judge is unstable
      */
     public AnswerAssert isFaithfulToContext(double threshold) {
-        Objects.requireNonNull(judge, "Call evaluatedBy() before asserting");
-        Objects.requireNonNull(question, "Call forQuestion() before asserting");
+        requireJudgeAndQuestion();
         Objects.requireNonNull(context, "Call givenContext() before asserting");
-        Verdict verdict = judge.evaluateGeneration(question, context, answer);
-        boolean passed = verdict.isAboveThreshold(threshold);
-        silentlyReport(new AssertionResult("FAITHFULNESS", question, verdict, threshold, passed));
-        if (!passed) {
-            throw new AssertionError(buildMessage("Faithfulness", verdict.score().value(), threshold));
-        }
-        return this;
+        return assertMetric("FAITHFULNESS", "Faithfulness", threshold,
+                () -> judge.evaluateGeneration(question, context, answer));
     }
 
     /**
@@ -113,18 +150,12 @@ public final class AnswerAssert {
      *
      * @param threshold minimum acceptable relevancy score in [0.0, 1.0]
      * @return this, for chaining
-     * @throws AssertionError if the score is below the threshold
+     * @throws AssertionError if the mean score is below the threshold or the judge is unstable
      */
     public AnswerAssert isRelevantToQuestion(double threshold) {
-        Objects.requireNonNull(judge, "Call evaluatedBy() before asserting");
-        Objects.requireNonNull(question, "Call forQuestion() before asserting");
-        Verdict verdict = judge.evaluateAnswerRelevancy(question, answer);
-        boolean passed = verdict.isAboveThreshold(threshold);
-        silentlyReport(new AssertionResult("ANSWER_RELEVANCY", question, verdict, threshold, passed));
-        if (!passed) {
-            throw new AssertionError(buildMessage("Answer relevancy", verdict.score().value(), threshold));
-        }
-        return this;
+        requireJudgeAndQuestion();
+        return assertMetric("ANSWER_RELEVANCY", "Answer relevancy", threshold,
+                () -> judge.evaluateAnswerRelevancy(question, answer));
     }
 
     /**
@@ -133,19 +164,13 @@ public final class AnswerAssert {
      *
      * @param threshold minimum acceptable rejection-justification score in [0.0, 1.0]
      * @return this, for chaining
-     * @throws AssertionError if the score is below the threshold
+     * @throws AssertionError if the mean score is below the threshold or the judge is unstable
      */
     public AnswerAssert correctlyRefusedToAnswer(double threshold) {
-        Objects.requireNonNull(judge, "Call evaluatedBy() before asserting");
-        Objects.requireNonNull(question, "Call forQuestion() before asserting");
+        requireJudgeAndQuestion();
         Objects.requireNonNull(context, "Call givenContext() before asserting");
-        Verdict verdict = judge.evaluateRejection(question, context, answer);
-        boolean passed = verdict.isAboveThreshold(threshold);
-        silentlyReport(new AssertionResult("REJECTION", question, verdict, threshold, passed));
-        if (!passed) {
-            throw new AssertionError(buildMessage("Rejection justification", verdict.score().value(), threshold));
-        }
-        return this;
+        return assertMetric("REJECTION", "Rejection justification", threshold,
+                () -> judge.evaluateRejection(question, context, answer));
     }
 
     /**
@@ -155,19 +180,13 @@ public final class AnswerAssert {
      * @param trajectory the ordered list of tool calls produced by the Generator
      * @param threshold  minimum acceptable trajectory quality score in [0.0, 1.0]
      * @return this, for chaining
-     * @throws AssertionError if the score is below the threshold
+     * @throws AssertionError if the mean score is below the threshold or the judge is unstable
      */
     public AnswerAssert hasValidToolTrajectory(List<ToolCall> trajectory, double threshold) {
-        Objects.requireNonNull(judge, "Call evaluatedBy() before asserting");
-        Objects.requireNonNull(question, "Call forQuestion() before asserting");
+        requireJudgeAndQuestion();
         Objects.requireNonNull(trajectory, "trajectory");
-        Verdict verdict = judge.evaluateToolTrajectory(question, trajectory, answer);
-        boolean passed = verdict.isAboveThreshold(threshold);
-        silentlyReport(new AssertionResult("TOOL_TRAJECTORY", question, verdict, threshold, passed));
-        if (!passed) {
-            throw new AssertionError(buildMessage("Tool trajectory quality", verdict.score().value(), threshold));
-        }
-        return this;
+        return assertMetric("TOOL_TRAJECTORY", "Tool trajectory quality", threshold,
+                () -> judge.evaluateToolTrajectory(question, trajectory, answer));
     }
 
     /**
@@ -175,19 +194,13 @@ public final class AnswerAssert {
      *
      * @param threshold minimum acceptable safety score in [0.0, 1.0]
      * @return this, for chaining
-     * @throws AssertionError if the score is below the threshold
+     * @throws AssertionError if the mean score is below the threshold or the judge is unstable
      */
     public AnswerAssert isSafeFromPromptInjection(double threshold) {
-        Objects.requireNonNull(judge, "Call evaluatedBy() before asserting");
-        Objects.requireNonNull(question, "Call forQuestion() before asserting");
+        requireJudgeAndQuestion();
         Objects.requireNonNull(context, "Call givenContext() before asserting");
-        Verdict verdict = judge.evaluatePromptInjection(question, context, answer);
-        boolean passed = verdict.isAboveThreshold(threshold);
-        silentlyReport(new AssertionResult("PROMPT_INJECTION", question, verdict, threshold, passed));
-        if (!passed) {
-            throw new AssertionError(buildMessage("Prompt injection safety", verdict.score().value(), threshold));
-        }
-        return this;
+        return assertMetric("PROMPT_INJECTION", "Prompt injection safety", threshold,
+                () -> judge.evaluatePromptInjection(question, context, answer));
     }
 
     /**
@@ -195,19 +208,13 @@ public final class AnswerAssert {
      *
      * @param threshold minimum acceptable compliance score in [0.0, 1.0]
      * @return this, for chaining
-     * @throws AssertionError if the score is below the threshold
+     * @throws AssertionError if the mean score is below the threshold or the judge is unstable
      */
     public AnswerAssert hasNoPIILeak(double threshold) {
-        Objects.requireNonNull(judge, "Call evaluatedBy() before asserting");
-        Objects.requireNonNull(question, "Call forQuestion() before asserting");
+        requireJudgeAndQuestion();
         Objects.requireNonNull(context, "Call givenContext() before asserting");
-        Verdict verdict = judge.evaluatePIILeak(question, context, answer);
-        boolean passed = verdict.isAboveThreshold(threshold);
-        silentlyReport(new AssertionResult("PII_LEAK", question, verdict, threshold, passed));
-        if (!passed) {
-            throw new AssertionError(buildMessage("PII leak compliance", verdict.score().value(), threshold));
-        }
-        return this;
+        return assertMetric("PII_LEAK", "PII leak compliance", threshold,
+                () -> judge.evaluatePIILeak(question, context, answer));
     }
 
     /**
@@ -218,16 +225,11 @@ public final class AnswerAssert {
      *
      * @param threshold minimum acceptable F1 score in [0.0, 1.0]
      * @return this, for chaining
-     * @throws AssertionError if the F1 score is below the threshold
+     * @throws AssertionError if the mean F1 is below the threshold or the judge is unstable
      */
     public AnswerAssert hasFactualCorrectnessF1(double threshold) {
-        FactualCorrectnessVerdict verdict = evaluateFactualCorrectness();
-        boolean passed = verdict.isF1AboveThreshold(threshold);
-        reportFactual(verdict, threshold, passed);
-        if (!passed) {
-            throw new AssertionError(buildMessage("Factual correctness F1", verdict.f1().value(), threshold));
-        }
-        return this;
+        return assertFactualMetric("Factual correctness F1", threshold,
+                FactualCorrectnessVerdict::f1);
     }
 
     /**
@@ -237,17 +239,11 @@ public final class AnswerAssert {
      *
      * @param threshold minimum acceptable precision in [0.0, 1.0]
      * @return this, for chaining
-     * @throws AssertionError if the precision score is below the threshold
+     * @throws AssertionError if the mean precision is below the threshold or the judge is unstable
      */
     public AnswerAssert hasFactualCorrectnessPrecision(double threshold) {
-        FactualCorrectnessVerdict verdict = evaluateFactualCorrectness();
-        boolean passed = verdict.isPrecisionAboveThreshold(threshold);
-        reportFactual(verdict, threshold, passed);
-        if (!passed) {
-            throw new AssertionError(
-                    buildMessage("Factual correctness precision", verdict.precision().value(), threshold));
-        }
-        return this;
+        return assertFactualMetric("Factual correctness precision", threshold,
+                FactualCorrectnessVerdict::precision);
     }
 
     /**
@@ -257,29 +253,39 @@ public final class AnswerAssert {
      *
      * @param threshold minimum acceptable recall in [0.0, 1.0]
      * @return this, for chaining
-     * @throws AssertionError if the recall score is below the threshold
+     * @throws AssertionError if the mean recall is below the threshold or the judge is unstable
      */
     public AnswerAssert hasFactualCorrectnessRecall(double threshold) {
-        FactualCorrectnessVerdict verdict = evaluateFactualCorrectness();
-        boolean passed = verdict.isRecallAboveThreshold(threshold);
-        reportFactual(verdict, threshold, passed);
+        return assertFactualMetric("Factual correctness recall", threshold,
+                FactualCorrectnessVerdict::recall);
+    }
+
+    private AnswerAssert assertFactualMetric(String label, double threshold,
+                                             Function<FactualCorrectnessVerdict, Score> selector) {
+        requireJudgeAndQuestion();
+        Objects.requireNonNull(reference, "Call comparedTo() before asserting factual correctness");
+        return assertMetric("FACTUAL_CORRECTNESS", label, threshold, () -> {
+            FactualCorrectnessVerdict verdict =
+                    judge.evaluateFactualCorrectness(question, answer, reference);
+            return Verdict.of(selector.apply(verdict), verdict.rationale(), verdict.model());
+        });
+    }
+
+    private AnswerAssert assertMetric(String type, String label, double threshold,
+                                      Supplier<Verdict> evaluation) {
+        RepeatedEvaluation evaluated = RepeatedEvaluation.run(runs, evaluation);
+        boolean passed = evaluated.passes(threshold, maxStddev);
+        silentlyReport(new AssertionResult(type, question, evaluated.aggregatedVerdict(),
+                threshold, passed));
         if (!passed) {
-            throw new AssertionError(
-                    buildMessage("Factual correctness recall", verdict.recall().value(), threshold));
+            throw new AssertionError(evaluated.failureMessage(label, threshold, maxStddev));
         }
         return this;
     }
 
-    private FactualCorrectnessVerdict evaluateFactualCorrectness() {
+    private void requireJudgeAndQuestion() {
         Objects.requireNonNull(judge, "Call evaluatedBy() before asserting");
         Objects.requireNonNull(question, "Call forQuestion() before asserting");
-        Objects.requireNonNull(reference, "Call comparedTo() before asserting factual correctness");
-        return judge.evaluateFactualCorrectness(question, answer, reference);
-    }
-
-    private void reportFactual(FactualCorrectnessVerdict verdict, double threshold, boolean passed) {
-        Verdict wrapped = Verdict.of(verdict.f1(), verdict.rationale(), verdict.model());
-        silentlyReport(new AssertionResult("FACTUAL_CORRECTNESS", question, wrapped, threshold, passed));
     }
 
     private void silentlyReport(AssertionResult result) {
@@ -290,9 +296,5 @@ public final class AnswerAssert {
                 // Reporters must never interrupt test execution
             }
         }
-    }
-
-    private static String buildMessage(String metric, double actual, double threshold) {
-        return metric + " score " + actual + " is below threshold " + threshold;
     }
 }

@@ -10,6 +10,15 @@ and is recorded here, so scores stay comparable across library versions.
 ## [Unreleased]
 
 ### Added
+- Variance control on assertions: `withRuns(n)` runs the judge n times and asserts
+  on the mean score; `withMaxStddev(x)` (default 0.15) additionally fails the
+  assertion when the judge is too unstable, with a failure message that
+  distinguishes "score below threshold" from "judge too unstable". Available on
+  both `AnswerAssert` and `ContextAssert`. (T1.2)
+- `ScoreStatistics`: public record exposing mean, population stddev, and run
+  count over repeated judge runs. (T1.2)
+- `OllamaJudge` now sends `temperature: 0` by default (recommended setting for
+  reproducible judging); configurable via `builder().temperature(x)`. (T1.2)
 - `JudgePromptLibrary`: every built-in judge prompt is now a public, versioned
   `JudgePromptTemplate` constant (one per `MetricType`), plus `defaults()` exposing
   the exact map a judge uses when nothing is overridden. (T1.1)

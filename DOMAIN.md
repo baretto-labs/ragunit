@@ -66,6 +66,7 @@ Any deviation requires a comment explaining why.
 | **MetricType** | Enum identifying each evaluation metric; key for JudgePromptTemplate maps | `MetricType` enum |
 | **JudgePromptTemplate** | Functional interface for domain-specific prompt customization per metric | Replaces built-in default prompt |
 | **JudgePromptLibrary** | The library of built-in, versioned judge prompts — one public constant per metric (`FAITHFULNESS_V1`…) | Prompt wording never changes in place; a change ships as a new `_Vn` constant |
+| **ScoreStatistics** | Mean, population stddev, and run count aggregated over repeated judge runs of one evaluation | Variance control: `withRuns(n)` / `withMaxStddev(x)` |
 
 ---
 
@@ -100,3 +101,4 @@ These names are banned because they are too generic or violate DDD principles:
 
 ### v0.2
 `JudgePromptLibrary` — visible, versioned default prompts for every MetricType
+`ScoreStatistics` — variance control over repeated judge runs (mean + stddev)
