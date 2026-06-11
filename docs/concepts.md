@@ -66,6 +66,43 @@ A `Verdict` is the output of a `RagJudge` evaluation:
 | `model` | `String` | Model that produced the verdict |
 | `statements` | `List<Statement>` | Claim decomposition (Faithfulness) |
 | `chunkVerdicts` | `List<ChunkVerdict>` | Per-chunk verdicts (ContextPrecision) |
+| `promptUsed` | `Optional<String>` | The exact prompt sent to the judge LLM |
+| `rawResponse` | `Optional<String>` | The raw LLM response the verdict was parsed from |
+
+---
+
+## JudgeResult
+
+`JudgeResult` is the structured, inspection-friendly view of one judge evaluation.
+When a test fails, a number is not enough — `JudgeResult` carries everything needed
+to audit the measurement:
+
+| Field | Type | Description |
+|---|---|---|
+| `score` | `double` | The normalized quality value |
+| `justification` | `String` | Why the judge scored it that way |
+| `promptUsed` | `String` | The exact prompt that was sent |
+| `rawResponse` | `String` | The raw LLM response |
+| `model` | `String` | Model that produced the result |
+
+Retrieve it from any assertion builder after a judged assertion (also populated
+when the assertion failed):
+
+```java
+AnswerAssert assertion = RagAssert.assertThatAnswer(answer)
+        .givenContext(context)
+        .forQuestion(question)
+        .evaluatedBy(judge);
+
+assertion.isFaithfulToContext(0.80);
+
+JudgeResult result = assertion.lastJudgeResult().orElseThrow();
+System.out.println(result.promptUsed());      // audit what was asked
+System.out.println(result.justification());   // why this score
+```
+
+`AssertionError` messages automatically include the judge's justification
+(first 500 characters), so a failing CI run is diagnosable without re-running.
 
 ---
 

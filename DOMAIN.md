@@ -67,6 +67,7 @@ Any deviation requires a comment explaining why.
 | **JudgePromptTemplate** | Functional interface for domain-specific prompt customization per metric | Replaces built-in default prompt |
 | **JudgePromptLibrary** | The library of built-in, versioned judge prompts — one public constant per metric (`FAITHFULNESS_V1`…) | Prompt wording never changes in place; a change ships as a new `_Vn` constant |
 | **ScoreStatistics** | Mean, population stddev, and run count aggregated over repeated judge runs of one evaluation | Variance control: `withRuns(n)` / `withMaxStddev(x)` |
+| **JudgeResult** | Structured, inspection-friendly view of one judge evaluation: score, justification, exact prompt, raw response | Deliberate exception to the `Result` ban — generic judge-output contract (v0.2) |
 
 ---
 
@@ -76,7 +77,7 @@ These names are banned because they are too generic or violate DDD principles:
 
 - `Manager`, `Handler`, `Helper`, `Utils`, `Util`, `Service` (in core)
 - `Evaluator` → use `Judge`
-- `Result` → use `Verdict`
+- `Result` → use `Verdict` (single exception: `JudgeResult`, the generic judge-output contract introduced in v0.2)
 - `Text` → use `Document` or `Answer` or `Question`
 - `Client` → use `OllamaJudge` (the impl carries the infra detail)
 

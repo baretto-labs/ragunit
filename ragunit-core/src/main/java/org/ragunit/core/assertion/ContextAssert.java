@@ -5,12 +5,14 @@ import org.ragunit.core.domain.Question;
 import org.ragunit.core.domain.ReferenceAnswer;
 import org.ragunit.core.domain.ScoreStatistics;
 import org.ragunit.core.domain.Verdict;
+import org.ragunit.core.judge.JudgeResult;
 import org.ragunit.core.judge.RagJudge;
 import org.ragunit.core.report.AssertionResult;
 import org.ragunit.core.report.RagReporter;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Supplier;
 
 /**
@@ -29,6 +31,7 @@ public final class ContextAssert {
     private RagJudge judge;
     private int runs = 1;
     private double maxStddev = ScoreStatistics.DEFAULT_MAX_STDDEV;
+    private JudgeResult lastJudgeResult;
 
     /**
      * Creates a new ContextAssert for the given retrieved documents.
@@ -186,10 +189,22 @@ public final class ContextAssert {
                 () -> judge.evaluateContextPIILeak(question, context));
     }
 
+    /**
+     * Returns the full {@link JudgeResult} of the most recent assertion —
+     * score, justification, exact prompt, and raw LLM response — for inspection
+     * beyond the pass/fail outcome. Also populated when the assertion failed.
+     *
+     * @return the last judge result, or empty if no judged assertion ran yet
+     */
+    public Optional<JudgeResult> lastJudgeResult() {
+        return Optional.ofNullable(lastJudgeResult);
+    }
+
     private ContextAssert assertMetric(String type, String label, double threshold,
                                        Supplier<Verdict> evaluation) {
         RepeatedEvaluation evaluated = RepeatedEvaluation.run(runs, evaluation);
         boolean passed = evaluated.passes(threshold, maxStddev);
+        lastJudgeResult = JudgeResult.fromVerdict(evaluated.aggregatedVerdict());
         silentlyReport(new AssertionResult(type, question, evaluated.aggregatedVerdict(),
                 threshold, passed));
         if (!passed) {

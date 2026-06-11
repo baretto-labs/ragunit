@@ -119,4 +119,30 @@ class VerdictTest {
         assertThat(topVerdict.computedPrecision().getAsDouble())
                 .isGreaterThan(bottomVerdict.computedPrecision().getAsDouble());
     }
+
+    @Test
+    void should_haveEmptyExchange_when_constructedWithoutPromptAndResponse() {
+        Verdict verdict = Verdict.of(new Score(HIGH_SCORE), RATIONALE, MODEL);
+
+        assertThat(verdict.promptUsed()).isEmpty();
+        assertThat(verdict.rawResponse()).isEmpty();
+    }
+
+    @Test
+    void should_carryPromptAndRawResponse_when_exchangeAttached() {
+        Verdict verdict = Verdict.of(new Score(HIGH_SCORE), RATIONALE, MODEL)
+                .withExchange("THE PROMPT", "{\"score\": 0.95}");
+
+        assertThat(verdict.promptUsed()).contains("THE PROMPT");
+        assertThat(verdict.rawResponse()).contains("{\"score\": 0.95}");
+    }
+
+    @Test
+    void should_preserveScoreAndRationale_when_exchangeAttached() {
+        Verdict verdict = Verdict.of(new Score(HIGH_SCORE), RATIONALE, MODEL)
+                .withExchange("p", "r");
+
+        assertThat(verdict.score().value()).isEqualTo(HIGH_SCORE);
+        assertThat(verdict.rationale()).isEqualTo(RATIONALE);
+    }
 }

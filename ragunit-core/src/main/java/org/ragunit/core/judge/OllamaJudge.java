@@ -175,7 +175,8 @@ public final class OllamaJudge implements RagJudge {
     @Override
     public Verdict evaluateContextPrecision(Question question, List<Document> context) {
         String prompt = render(MetricType.CONTEXT_PRECISION, PromptContext.forRetrieval(question, context));
-        return VerdictParser.parse(rawOllamaCall(prompt), model, context);
+        String response = rawOllamaCall(prompt);
+        return VerdictParser.parse(response, model, context).withExchange(prompt, response);
     }
 
     @Override
@@ -221,7 +222,8 @@ public final class OllamaJudge implements RagJudge {
     }
 
     private Verdict callOllama(String prompt) {
-        return VerdictParser.parse(rawOllamaCall(prompt), model);
+        String response = rawOllamaCall(prompt);
+        return VerdictParser.parse(response, model).withExchange(prompt, response);
     }
 
     private String rawOllamaCall(String prompt) {

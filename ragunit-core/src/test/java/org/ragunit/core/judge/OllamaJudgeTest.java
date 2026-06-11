@@ -597,6 +597,42 @@ class OllamaJudgeTest {
                 .hasMessageContaining("model");
     }
 
+    // --- prompt and raw response exposure ---
+
+    @Test
+    void should_attachPromptUsedToVerdict_when_evaluatingRetrieval() {
+        registerHandler(ollamaJsonResponse(
+                "{\"score\": 0.9, \"rationale\": \"OK.\", \"statements\": []}"));
+
+        Verdict verdict = judge().evaluateRetrieval(QUESTION, CONTEXT);
+
+        assertThat(verdict.promptUsed()).hasValueSatisfying(prompt ->
+                assertThat(prompt).contains(QUESTION.text()));
+    }
+
+    @Test
+    void should_attachRawResponseToVerdict_when_evaluatingRetrieval() {
+        registerHandler(ollamaJsonResponse(
+                "{\"score\": 0.9, \"rationale\": \"OK.\", \"statements\": []}"));
+
+        Verdict verdict = judge().evaluateRetrieval(QUESTION, CONTEXT);
+
+        assertThat(verdict.rawResponse()).hasValueSatisfying(raw ->
+                assertThat(raw).contains("\"score\": 0.9"));
+    }
+
+    @Test
+    void should_attachExchangeToVerdict_when_evaluatingContextPrecision() {
+        registerHandler(ollamaJsonResponse(
+                "{\"score\": 1.0, \"rationale\": \"OK.\", \"statements\": [],"
+                + " \"chunks\": [{\"rank\": 1, \"relevant\": true}]}"));
+
+        Verdict verdict = judge().evaluateContextPrecision(QUESTION, CONTEXT);
+
+        assertThat(verdict.promptUsed()).isPresent();
+        assertThat(verdict.rawResponse()).isPresent();
+    }
+
     // --- temperature ---
 
     @Test

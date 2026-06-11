@@ -19,6 +19,9 @@ import java.util.function.Supplier;
  */
 final class RepeatedEvaluation {
 
+    /** Maximum justification length quoted in AssertionError messages. */
+    private static final int MAX_JUSTIFICATION_CHARS = 500;
+
     private final List<Verdict> verdicts;
     private final ScoreStatistics statistics;
 
@@ -49,7 +52,7 @@ final class RepeatedEvaluation {
             return last;
         }
         return new Verdict(new Score(statistics.mean()), last.rationale(), last.model(),
-                last.statements(), last.chunkVerdicts());
+                last.statements(), last.chunkVerdicts(), last.promptUsed(), last.rawResponse());
     }
 
     String failureMessage(String label, double threshold, double maxStddev) {
@@ -62,7 +65,18 @@ final class RepeatedEvaluation {
                     .formatted(label, statistics.stddev(), statistics.runs(), maxStddev,
                             statistics.mean()));
         }
-        return String.join(" AND ", failures);
+        return String.join(" AND ", failures) + justificationSuffix();
+    }
+
+    private String justificationSuffix() {
+        String justification = verdicts.get(verdicts.size() - 1).rationale().trim();
+        if (justification.isEmpty()) {
+            return "";
+        }
+        if (justification.length() > MAX_JUSTIFICATION_CHARS) {
+            justification = justification.substring(0, MAX_JUSTIFICATION_CHARS) + "…";
+        }
+        return " — judge justification: \"%s\"".formatted(justification);
     }
 
     private String belowThresholdMessage(String label, double threshold) {

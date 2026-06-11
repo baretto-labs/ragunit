@@ -2,6 +2,7 @@ package org.ragunit.core.domain;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.OptionalDouble;
 
 /**
@@ -17,14 +18,21 @@ import java.util.OptionalDouble;
  * <p>When {@code chunkVerdicts} is non-empty, {@link #computedPrecision()} returns the
  * RAGAS Average Precision score — rewarding pipelines that rank relevant chunks first.
  *
+ * <p>When produced by a real judge, the verdict also carries the exact prompt sent
+ * to the LLM ({@code promptUsed}) and the raw LLM response ({@code rawResponse}) —
+ * a score has no meaning if the question asked to the judge cannot be inspected.
+ *
  * @param score         the normalized quality score in [0.0, 1.0]
  * @param rationale     the judge's human-readable explanation
  * @param model         the identifier of the model that produced this verdict
  * @param statements    claim-level decomposition for faithfulness (may be empty)
  * @param chunkVerdicts per-chunk relevance judgments for context precision (may be empty)
+ * @param promptUsed    the exact prompt sent to the judge LLM, or empty if not captured
+ * @param rawResponse   the raw LLM response the verdict was parsed from, or empty if not captured
  */
 public record Verdict(Score score, String rationale, String model,
-                      List<Statement> statements, List<ChunkVerdict> chunkVerdicts) {
+                      List<Statement> statements, List<ChunkVerdict> chunkVerdicts,
+                      Optional<String> promptUsed, Optional<String> rawResponse) {
 
     /** Validates all fields and defensive-copies both lists. */
     public Verdict {
@@ -33,8 +41,24 @@ public record Verdict(Score score, String rationale, String model,
         Objects.requireNonNull(model, "model");
         Objects.requireNonNull(statements, "statements");
         Objects.requireNonNull(chunkVerdicts, "chunkVerdicts");
+        Objects.requireNonNull(promptUsed, "promptUsed");
+        Objects.requireNonNull(rawResponse, "rawResponse");
         statements = List.copyOf(statements);
         chunkVerdicts = List.copyOf(chunkVerdicts);
+    }
+
+    /**
+     * Creates a verdict without the prompt/response exchange (v0.1-compatible form).
+     *
+     * @param score         the normalized quality score
+     * @param rationale     the judge's explanation
+     * @param model         the model identifier
+     * @param statements    claim-level decomposition (may be empty)
+     * @param chunkVerdicts per-chunk relevance judgments (may be empty)
+     */
+    public Verdict(Score score, String rationale, String model,
+                   List<Statement> statements, List<ChunkVerdict> chunkVerdicts) {
+        this(score, rationale, model, statements, chunkVerdicts, Optional.empty(), Optional.empty());
     }
 
     /**
@@ -47,6 +71,20 @@ public record Verdict(Score score, String rationale, String model,
      */
     public static Verdict of(Score score, String rationale, String model) {
         return new Verdict(score, rationale, model, List.of(), List.of());
+    }
+
+    /**
+     * Returns a copy of this verdict carrying the judge exchange: the exact prompt
+     * sent to the LLM and the raw response it returned.
+     *
+     * @param prompt   the exact prompt sent to the judge LLM
+     * @param response the raw LLM response
+     * @return a new Verdict with {@code promptUsed} and {@code rawResponse} present
+     */
+    public Verdict withExchange(String prompt, String response) {
+        return new Verdict(score, rationale, model, statements, chunkVerdicts,
+                Optional.of(Objects.requireNonNull(prompt, "prompt")),
+                Optional.of(Objects.requireNonNull(response, "response")));
     }
 
     /**

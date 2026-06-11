@@ -10,6 +10,15 @@ and is recorded here, so scores stay comparable across library versions.
 ## [Unreleased]
 
 ### Added
+- `JudgeResult`: public record exposing `score`, `justification`, `promptUsed`,
+  `rawResponse`, and `model` for one judge evaluation. Retrieved via
+  `lastJudgeResult()` on `AnswerAssert` and `ContextAssert` (also populated when
+  the assertion failed). (T1.3)
+- `Verdict` now optionally carries the judge exchange: `promptUsed` and
+  `rawResponse`, populated by `OllamaJudge` on every evaluation. The
+  v0.1 five-argument constructor and `Verdict.of(...)` are unchanged. (T1.3)
+- `AssertionError` messages now include the judge's justification (first
+  500 characters), so a failing CI run is diagnosable without re-running. (T1.3)
 - Variance control on assertions: `withRuns(n)` runs the judge n times and asserts
   on the mean score; `withMaxStddev(x)` (default 0.15) additionally fails the
   assertion when the judge is too unstable, with a failure message that

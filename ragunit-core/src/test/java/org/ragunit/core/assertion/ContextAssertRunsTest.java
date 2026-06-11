@@ -99,6 +99,17 @@ class ContextAssertRunsTest {
     }
 
     @Test
+    void should_exposeJudgeResult_when_assertionPasses() {
+        StubScriptedRagJudge judge = new StubScriptedRagJudge(List.of(STABLE_HIGH));
+        ContextAssert assertion = contextAssert(judge);
+
+        assertion.hasRelevanceScore(0.8);
+
+        assertThat(assertion.lastJudgeResult()).hasValueSatisfying(result ->
+                assertThat(result.justification()).isEqualTo("high"));
+    }
+
+    @Test
     void should_throwNullPointerException_when_judgeIsMissingForAnyAssertion() {
         List<java.util.function.Consumer<ContextAssert>> assertions = List.of(
                 c -> c.hasRelevanceScore(0.5),
