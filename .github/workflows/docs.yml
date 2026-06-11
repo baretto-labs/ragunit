@@ -1,0 +1,50 @@
+name: Publish Documentation
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout ragunit
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-mkdocs-material
+
+      - name: Install MkDocs Material
+        run: pip install mkdocs-material==9.5.18
+
+      - name: Build docs
+        run: mkdocs build --strict
+
+      - name: Configure SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DOCS_DEPLOY_KEY }}
+
+      - name: Push to ragunit-documentation
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          git clone git@github.com:baretto-labs/ragunit-documentation.git docs-repo
+          rm -rf docs-repo/*
+          cp -r site/. docs-repo/
+          cd docs-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet || git commit -m "docs: publish ${RELEASE_TAG}"
+          git push origin main

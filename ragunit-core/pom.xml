@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.ragunit</groupId>
+        <artifactId>ragunit</artifactId>
+        <version>0.1</version>
+    </parent>
+
+    <artifactId>ragunit-core</artifactId>
+    <name>RAGUnit Core</name>
+    <description>
+        Zero-dependency core module. Pure Java 17.
+        Contains: domain model, RagJudge interface, RagAssert fluent API, RagReporter.
+        Supply chain rule: NO compile or runtime dependencies allowed.
+    </description>
+
+    <dependencies>
+        <!--
+            JUnit 5 is 'provided': it must be on the compile classpath for @RagTest
+            (which is part of the production JAR), and on the test classpath for tests.
+            Users always bring JUnit 5 themselves — it is not a transitive dependency.
+            AssertJ stays 'test' only (never referenced in production code).
+        -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- PITest activated here (core only) — run with: mvn -pl ragunit-core pitest:mutationCoverage -->
+            <plugin>
+                <groupId>org.pitest</groupId>
+                <artifactId>pitest-maven</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

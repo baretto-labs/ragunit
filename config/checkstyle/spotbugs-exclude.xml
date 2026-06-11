@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    SpotBugs exclusion filter for RAGUnit.
+    Each exclusion MUST include a justification comment.
+    Do NOT add exclusions to silence security findings — fix them instead.
+-->
+<FindBugsFilter>
+
+    <!--
+        EI_EXPOSE_REP / EI_EXPOSE_REP2: SpotBugs warns about returning mutable objects.
+        RAGUnit domain objects use Java records (immutable by design) and
+        List.copyOf() / Collections.unmodifiableList() at boundaries.
+        False positives on record accessors are excluded.
+    -->
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
+        <Class name="~org\.ragunit\.core\.domain\..*"/>
+    </Match>
+
+    <!--
+        RCN_REDUNDANT_NULLCHECK_WOULD_HAVE_BEEN_A_NPE: false positive on
+        Java 17 pattern matching and switch expressions.
+    -->
+    <Match>
+        <Bug pattern="RCN_REDUNDANT_NULLCHECK_WOULD_HAVE_BEEN_A_NPE"/>
+    </Match>
+
+
+    <!--
+        DE_MIGHT_IGNORE: silentlyReport() intentionally swallows all exceptions from reporters.
+        Design contract: a reporter failure MUST NOT interrupt test execution.
+        This is the core guarantee of the Observer pattern in RAGUnit.
+        See RagReporter Javadoc: "Implementations must never throw."
+    -->
+    <Match>
+        <Bug pattern="DE_MIGHT_IGNORE"/>
+        <Method name="silentlyReport"/>
+    </Match>
+
+    <!--
+        VA_FORMAT_STRING_USES_NEWLINE: SpotBugs recommends %n over \n in format strings.
+        RAGUnit code conventions mandate Java text blocks (JEP 378) for all multi-line strings.
+        Text blocks use \n as the natural line separator (UTF-8, not platform-dependent).
+        The prompt builder methods use text blocks with .formatted() — \n here is intentional
+        and correct. Using %n would require abandoning text blocks or ugly workarounds.
+    -->
+    <Match>
+        <Bug pattern="VA_FORMAT_STRING_USES_NEWLINE"/>
+        <Class name="~org\.ragunit\..*Judge"/>
+    </Match>
+
+</FindBugsFilter>
