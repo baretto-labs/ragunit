@@ -54,3 +54,6 @@ settings-local.xml
 CLAUDE.md
 .claude/
 .tasks/
+
+# MkDocs build output
+site/

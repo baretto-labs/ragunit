@@ -1,7 +1,7 @@
 # Contributing
 
 RAGUnit follows strict TDD and DDD principles. Before contributing, read
-[`DOMAIN.md`](../DOMAIN.md) and [`CLAUDE.md`](../CLAUDE.md).
+[`DOMAIN.md`](https://github.com/baretto-labs/ragunit/blob/main/DOMAIN.md) and [`CLAUDE.md`](https://github.com/baretto-labs/ragunit/blob/main/CLAUDE.md).
 
 ---
 
@@ -48,7 +48,7 @@ ragunit/
 - `@RagTest` on every test that calls a judge
 
 ### DDD
-- Every public name must come from [`DOMAIN.md`](../DOMAIN.md)
+- Every public name must come from [`DOMAIN.md`](https://github.com/baretto-labs/ragunit/blob/main/DOMAIN.md)
 - No `Manager`, `Helper`, `Utils`, `Service` in `ragunit-core`
 - Propose new terms in your PR if needed
 

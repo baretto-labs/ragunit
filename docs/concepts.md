@@ -1,6 +1,6 @@
 # Concepts
 
-RAGUnit uses a strict domain model. Every class name comes from the [ubiquitous language](../DOMAIN.md).
+RAGUnit uses a strict domain model. Every class name comes from the [ubiquitous language](https://github.com/baretto-labs/ragunit/blob/main/DOMAIN.md).
 
 ## The RAG Pipeline
 

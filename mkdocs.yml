@@ -1,7 +1,7 @@
 site_name: RAGUnit
 site_description: The evaluation library for RAG pipelines — Java-native, 100% local, zero cloud dependency.
-site_url: https://baretto-labs.github.io/ragunit-documentation
-repo_url: https://github.com/baretto-labs/ragunit-documentation
+site_url: https://ragunit.org/
+repo_url: https://github.com/baretto-labs/ragunit
 repo_name: baretto-labs/ragunit
 edit_uri: ""
 

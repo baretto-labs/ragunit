@@ -1,9 +1,10 @@
 name: Release
 
+# Manual trigger only: distribution is via JitPack for now (validation-first
+# strategy). Re-enable the tag trigger when Maven Central publishing activates
+# (TASK-026) and the CENTRAL_*/GPG_* secrets are configured.
 on:
-  push:
-    tags:
-      - 'v*.*.*'
+  workflow_dispatch:
 
 jobs:
   publish:
