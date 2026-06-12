@@ -9,7 +9,9 @@ import org.ragunit.core.domain.Score;
 import org.ragunit.core.domain.ScoreStatistics;
 import org.ragunit.core.domain.ToolCall;
 import org.ragunit.core.domain.Verdict;
+import org.ragunit.core.judge.JudgeQuery;
 import org.ragunit.core.judge.JudgeResult;
+import org.ragunit.core.judge.MetricType;
 import org.ragunit.core.judge.RagJudge;
 import org.ragunit.core.report.AssertionResult;
 import org.ragunit.core.report.RagReporter;
@@ -141,7 +143,7 @@ public final class AnswerAssert {
         requireJudgeAndQuestion();
         Objects.requireNonNull(context, "Call givenContext() before asserting");
         return assertMetric("FAITHFULNESS", "Faithfulness", threshold,
-                () -> judge.evaluateGeneration(question, context, answer));
+                contextQuery(MetricType.GENERATION));
     }
 
     /**
@@ -157,8 +159,12 @@ public final class AnswerAssert {
      */
     public AnswerAssert isRelevantToQuestion(double threshold) {
         requireJudgeAndQuestion();
-        return assertMetric("ANSWER_RELEVANCY", "Answer relevancy", threshold,
-                () -> judge.evaluateAnswerRelevancy(question, answer));
+        JudgeQuery query = JudgeQuery.builder()
+                .criterion(MetricType.ANSWER_RELEVANCY)
+                .input(JudgeQuery.INPUT_QUESTION, question.text())
+                .input(JudgeQuery.INPUT_ANSWER, answer.text())
+                .build();
+        return assertMetric("ANSWER_RELEVANCY", "Answer relevancy", threshold, query);
     }
 
     /**
@@ -173,7 +179,7 @@ public final class AnswerAssert {
         requireJudgeAndQuestion();
         Objects.requireNonNull(context, "Call givenContext() before asserting");
         return assertMetric("REJECTION", "Rejection justification", threshold,
-                () -> judge.evaluateRejection(question, context, answer));
+                contextQuery(MetricType.REJECTION));
     }
 
     /**
@@ -203,7 +209,7 @@ public final class AnswerAssert {
         requireJudgeAndQuestion();
         Objects.requireNonNull(context, "Call givenContext() before asserting");
         return assertMetric("PROMPT_INJECTION", "Prompt injection safety", threshold,
-                () -> judge.evaluatePromptInjection(question, context, answer));
+                contextQuery(MetricType.PROMPT_INJECTION));
     }
 
     /**
@@ -217,7 +223,7 @@ public final class AnswerAssert {
         requireJudgeAndQuestion();
         Objects.requireNonNull(context, "Call givenContext() before asserting");
         return assertMetric("PII_LEAK", "PII leak compliance", threshold,
-                () -> judge.evaluatePIILeak(question, context, answer));
+                contextQuery(MetricType.PII_LEAK));
     }
 
     /**
@@ -283,6 +289,21 @@ public final class AnswerAssert {
      */
     public Optional<JudgeResult> lastJudgeResult() {
         return Optional.ofNullable(lastJudgeResult);
+    }
+
+    /** Builds the canonical question/context/answer query for a built-in metric. */
+    private JudgeQuery contextQuery(MetricType metric) {
+        return JudgeQuery.builder()
+                .criterion(metric)
+                .input(JudgeQuery.INPUT_QUESTION, question.text())
+                .input(JudgeQuery.INPUT_CONTEXT, context.stream().map(Document::content).toList())
+                .input(JudgeQuery.INPUT_ANSWER, answer.text())
+                .build();
+    }
+
+    private AnswerAssert assertMetric(String type, String label, double threshold,
+                                      JudgeQuery query) {
+        return assertMetric(type, label, threshold, () -> judge.verdictFor(query));
     }
 
     private AnswerAssert assertMetric(String type, String label, double threshold,

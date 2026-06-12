@@ -5,7 +5,9 @@ import org.ragunit.core.domain.Question;
 import org.ragunit.core.domain.ReferenceAnswer;
 import org.ragunit.core.domain.ScoreStatistics;
 import org.ragunit.core.domain.Verdict;
+import org.ragunit.core.judge.JudgeQuery;
 import org.ragunit.core.judge.JudgeResult;
+import org.ragunit.core.judge.MetricType;
 import org.ragunit.core.judge.RagJudge;
 import org.ragunit.core.report.AssertionResult;
 import org.ragunit.core.report.RagReporter;
@@ -113,7 +115,7 @@ public final class ContextAssert {
     public ContextAssert hasRelevanceScore(double threshold) {
         requireJudgeAndQuestion();
         return assertMetric("CONTEXT_RELEVANCE", "Context relevance", threshold,
-                () -> judge.evaluateRetrieval(question, context));
+                retrievalQuery(MetricType.RETRIEVAL));
     }
 
     /**
@@ -127,7 +129,7 @@ public final class ContextAssert {
     public ContextAssert correctlyRefusedToAnswer(double threshold) {
         requireJudgeAndQuestion();
         return assertMetric("REJECTION", "Rejection justification", threshold,
-                () -> judge.evaluateContextRejection(question, context));
+                retrievalQuery(MetricType.CONTEXT_REJECTION));
     }
 
     /**
@@ -145,8 +147,13 @@ public final class ContextAssert {
     public ContextAssert hasContextRecall(ReferenceAnswer reference, double threshold) {
         requireJudgeAndQuestion();
         Objects.requireNonNull(reference, "reference");
-        return assertMetric("CONTEXT_RECALL", "Context recall", threshold,
-                () -> judge.evaluateContextRecall(question, context, reference));
+        JudgeQuery query = JudgeQuery.builder()
+                .criterion(MetricType.CONTEXT_RECALL)
+                .input(JudgeQuery.INPUT_QUESTION, question.text())
+                .input(JudgeQuery.INPUT_CONTEXT, context.stream().map(Document::content).toList())
+                .input(JudgeQuery.INPUT_REFERENCE, reference.text())
+                .build();
+        return assertMetric("CONTEXT_RECALL", "Context recall", threshold, query);
     }
 
     /**
@@ -160,7 +167,7 @@ public final class ContextAssert {
     public ContextAssert hasContextPrecision(double threshold) {
         requireJudgeAndQuestion();
         return assertMetric("CONTEXT_PRECISION", "Context precision", threshold,
-                () -> judge.evaluateContextPrecision(question, context));
+                retrievalQuery(MetricType.CONTEXT_PRECISION));
     }
 
     /**
@@ -173,7 +180,7 @@ public final class ContextAssert {
     public ContextAssert isSafeFromPromptInjection(double threshold) {
         requireJudgeAndQuestion();
         return assertMetric("PROMPT_INJECTION", "Prompt injection safety", threshold,
-                () -> judge.evaluateContextPromptInjection(question, context));
+                retrievalQuery(MetricType.CONTEXT_PROMPT_INJECTION));
     }
 
     /**
@@ -186,7 +193,7 @@ public final class ContextAssert {
     public ContextAssert hasNoPIILeak(double threshold) {
         requireJudgeAndQuestion();
         return assertMetric("PII_LEAK", "PII leak compliance", threshold,
-                () -> judge.evaluateContextPIILeak(question, context));
+                retrievalQuery(MetricType.CONTEXT_PII_LEAK));
     }
 
     /**
@@ -198,6 +205,20 @@ public final class ContextAssert {
      */
     public Optional<JudgeResult> lastJudgeResult() {
         return Optional.ofNullable(lastJudgeResult);
+    }
+
+    /** Builds the canonical question/context query for a built-in retrieval metric. */
+    private JudgeQuery retrievalQuery(MetricType metric) {
+        return JudgeQuery.builder()
+                .criterion(metric)
+                .input(JudgeQuery.INPUT_QUESTION, question.text())
+                .input(JudgeQuery.INPUT_CONTEXT, context.stream().map(Document::content).toList())
+                .build();
+    }
+
+    private ContextAssert assertMetric(String type, String label, double threshold,
+                                       JudgeQuery query) {
+        return assertMetric(type, label, threshold, () -> judge.verdictFor(query));
     }
 
     private ContextAssert assertMetric(String type, String label, double threshold,

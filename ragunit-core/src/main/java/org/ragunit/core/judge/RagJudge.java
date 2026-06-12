@@ -22,8 +22,14 @@ import java.util.List;
  * </ul>
  *
  * <p>Implementations must be synchronous. See TASK-004 for {@code OllamaJudge}.
+ *
+ * <p>Every RagJudge is also a generic {@link Judge}: a {@link JudgeQuery} whose
+ * criterion is a built-in {@link MetricType} is dispatched to the corresponding
+ * typed method below, so existing implementations support queries for free.
+ * Queries with a custom {@link Criterion} require overriding
+ * {@link #verdictFor(JudgeQuery)} (as {@code OllamaJudge} does).
  */
-public interface RagJudge {
+public interface RagJudge extends Judge {
 
     /**
      * Evaluates how relevant the retrieved {@code context} is for the given {@code question}.
@@ -208,4 +214,34 @@ public interface RagJudge {
      * @return a {@link Verdict} with a trajectory quality score
      */
     Verdict evaluateToolTrajectory(Question question, List<ToolCall> trajectory, Answer answer);
+
+    /**
+     * Evaluates a generic query, returning the full {@link Verdict}.
+     *
+     * <p>The default implementation dispatches built-in {@link MetricType} criteria
+     * to the typed methods of this interface, reading the canonical inputs
+     * ({@code question}, {@code context}, {@code answer}, {@code reference}) from
+     * the query. {@code TOOL_TRAJECTORY} is not query-dispatchable (a trajectory
+     * has no faithful flat-text encoding) — use
+     * {@link #evaluateToolTrajectory(Question, List, Answer)} directly.
+     *
+     * @param query the criterion and named inputs to judge
+     * @return the verdict produced by the dispatched evaluation
+     * @throws JudgeException if the criterion is not a built-in metric, a required
+     *                        input is missing, or the metric is not query-dispatchable
+     */
+    default Verdict verdictFor(JudgeQuery query) {
+        return JudgeQueryDispatch.verdictFor(this, query);
+    }
+
+    /**
+     * Evaluates a generic query, returning a structured {@link JudgeResult}.
+     *
+     * @param query the criterion and named inputs to judge
+     * @return the structured result built from {@link #verdictFor(JudgeQuery)}
+     */
+    @Override
+    default JudgeResult evaluate(JudgeQuery query) {
+        return JudgeResult.fromVerdict(verdictFor(query));
+    }
 }

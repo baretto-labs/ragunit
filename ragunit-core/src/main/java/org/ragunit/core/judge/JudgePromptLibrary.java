@@ -285,6 +285,26 @@ public final class JudgePromptLibrary {
     }
 
     /**
+     * Renders the generic criterion prompt, version 1: the query's instruction
+     * and named inputs followed by the standard JSON reply contract.
+     *
+     * <p>Used by judges for {@link JudgeQuery} evaluations whose criterion is
+     * not a built-in {@link MetricType}.
+     *
+     * @param query the criterion and named inputs to judge
+     * @return the full prompt string to send to the LLM
+     */
+    public static String criterionPromptV1(JudgeQuery query) {
+        return """
+                You are an evaluation judge.
+
+                %s
+
+                Rate how well the criterion is satisfied.
+                %s""".formatted(query.render(), JSON_REPLY_RETRIEVAL);
+    }
+
+    /**
      * Returns the current default prompt template for every {@link MetricType}.
      *
      * <p>This is the exact map a judge uses when no override is configured —

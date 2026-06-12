@@ -597,6 +597,61 @@ class OllamaJudgeTest {
                 .hasMessageContaining("model");
     }
 
+    // --- generic JudgeQuery evaluation ---
+
+    @Test
+    void should_sendCriterionInstructionAndInputs_when_evaluatingCustomCriterionQuery() {
+        AtomicReference<String> capturedBody = new AtomicReference<>();
+        String json = "{\"score\": 0.8, \"rationale\": \"Concise.\", \"statements\": []}";
+        registerCapturingHandler(ollamaJsonResponse(json), capturedBody);
+
+        JudgeQuery query = JudgeQuery.builder()
+                .criterion(Criterion.of("conciseness", "Is the summary concise and faithful?"))
+                .input("Source", "A long article about France.")
+                .input("Summary", "France, briefly.")
+                .build();
+
+        JudgeResult result = judge().evaluate(query);
+
+        assertThat(capturedBody.get()).contains("Is the summary concise and faithful?");
+        assertThat(capturedBody.get()).contains("France, briefly.");
+        assertThat(result.score()).isEqualTo(0.8);
+        assertThat(result.justification()).isEqualTo("Concise.");
+    }
+
+    @Test
+    void should_exposePromptAndRawResponse_when_evaluatingCustomCriterionQuery() {
+        String json = "{\"score\": 0.8, \"rationale\": \"OK.\", \"statements\": []}";
+        registerHandler(ollamaJsonResponse(json));
+
+        JudgeQuery query = JudgeQuery.builder()
+                .criterion(Criterion.of("clarity", "Is the text clear?"))
+                .input("Text", "Some text.")
+                .build();
+
+        JudgeResult result = judge().evaluate(query);
+
+        assertThat(result.promptUsed()).contains("Is the text clear?");
+        assertThat(result.rawResponse()).contains("\"score\": 0.8");
+    }
+
+    @Test
+    void should_useMetricPromptTemplate_when_queryCriterionIsBuiltInMetric() {
+        AtomicReference<String> capturedBody = new AtomicReference<>();
+        String json = "{\"score\": 0.9, \"rationale\": \"OK.\", \"statements\": []}";
+        registerCapturingHandler(ollamaJsonResponse(json), capturedBody);
+
+        JudgeQuery query = JudgeQuery.builder()
+                .criterion(MetricType.RETRIEVAL)
+                .input(JudgeQuery.INPUT_QUESTION, QUESTION.text())
+                .input(JudgeQuery.INPUT_CONTEXT, List.of("Paris is the capital."))
+                .build();
+
+        judge().evaluate(query);
+
+        assertThat(capturedBody.get()).contains("Rate how relevant");
+    }
+
     // --- prompt and raw response exposure ---
 
     @Test

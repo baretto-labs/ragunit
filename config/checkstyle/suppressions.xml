@@ -42,4 +42,13 @@
     <suppress checks="CyclomaticComplexity|MethodLength"
               files="VerdictParser\.java|Verdict\.java|JsonTestsetImporter\.java|CsvTestsetImporter\.java"/>
 
+    <!--
+        JudgeQueryDispatch.verdictFor() is an exhaustive switch over all MetricType
+        constants — one case per metric, enforced by the compiler (no default branch).
+        The cyclomatic complexity is inherent to the exhaustive dispatch table;
+        splitting it would scatter the metric-to-method mapping without reducing it.
+    -->
+    <suppress checks="CyclomaticComplexity|MethodLength"
+              files="JudgeQueryDispatch\.java"/>
+
 </suppressions>

@@ -217,6 +217,23 @@ public final class OllamaJudge implements RagJudge {
                 PromptContext.forGeneration(question, context, answer)));
     }
 
+    /**
+     * Evaluates a generic query. Built-in {@link MetricType} criteria use the
+     * configured per-metric prompt templates; any other {@link Criterion} is
+     * judged with the generic {@link JudgePromptLibrary#criterionPromptV1(JudgeQuery)}
+     * prompt.
+     *
+     * @param query the criterion and named inputs to judge
+     * @return the full verdict, carrying the exact prompt and raw response
+     */
+    @Override
+    public Verdict verdictFor(JudgeQuery query) {
+        if (query.criterion() instanceof MetricType) {
+            return RagJudge.super.verdictFor(query);
+        }
+        return callOllama(JudgePromptLibrary.criterionPromptV1(query));
+    }
+
     private String render(MetricType type, PromptContext ctx) {
         return templates.get(type).render(ctx);
     }

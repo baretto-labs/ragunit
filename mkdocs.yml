@@ -55,6 +55,7 @@ nav:
     - Custom Adapters: integrations/adapters.md
   - Custom Prompts: custom-prompts.md
   - Variance Control: variance-control.md
+  - Generic Evaluation: judge-query.md
   - Contributing: contributing.md
 
 plugins:

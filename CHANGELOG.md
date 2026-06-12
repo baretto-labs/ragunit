@@ -10,6 +10,16 @@ and is recorded here, so scores stay comparable across library versions.
 ## [Unreleased]
 
 ### Added
+- Generic evaluation API: `Judge.evaluate(JudgeQuery)` returns a `JudgeResult`.
+  `JudgeQuery` (builder-built) carries a `Criterion` — the named evaluation
+  question — plus arbitrary named inputs, so any (input / output / reference)
+  triplet can be judged, not only RAG. `MetricType` implements `Criterion`;
+  queries with a built-in metric criterion are dispatched to the typed
+  `RagJudge` methods automatically (custom RagJudge implementations get query
+  support for free). `RagAssert` now constructs `JudgeQuery` objects under the
+  hood; its public API is unchanged. New example:
+  `SummaryJudgeQueryExampleTest` judges a summary against a source and a
+  reference with ad-hoc criteria. (T2.1)
 - `JudgeResult`: public record exposing `score`, `justification`, `promptUsed`,
   `rawResponse`, and `model` for one judge evaluation. Retrieved via
   `lastJudgeResult()` on `AnswerAssert` and `ContextAssert` (also populated when
