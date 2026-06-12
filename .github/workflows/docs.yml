@@ -2,12 +2,24 @@ name: Publish Documentation
 
 on:
   push:
-    tags:
-      - 'v*.*.*'
+    branches: [ main ]
+    paths:
+      - 'docs/**'
+      - 'mkdocs.yml'
+      - '.github/workflows/docs.yml'
   workflow_dispatch:
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
 jobs:
-  publish:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout ragunit
@@ -30,21 +42,23 @@ jobs:
       - name: Build docs
         run: mkdocs build --strict
 
-      - name: Configure SSH agent
-        uses: webfactory/ssh-agent@v0.9.0
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
         with:
-          ssh-private-key: ${{ secrets.DOCS_DEPLOY_KEY }}
+          enablement: true
 
-      - name: Push to ragunit-documentation
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: |
-          git clone git@github.com:baretto-labs/ragunit-documentation.git docs-repo
-          rm -rf docs-repo/*
-          cp -r site/. docs-repo/
-          cd docs-repo
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git diff --cached --quiet || git commit -m "docs: publish ${RELEASE_TAG}"
-          git push origin main
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

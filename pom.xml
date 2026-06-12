@@ -49,7 +49,8 @@
 
         <!-- Test dependency versions -->
         <junit.jupiter.version>5.11.4</junit.jupiter.version>
-        <assertj.version>3.26.3</assertj.version>
+        <!-- 3.27.7+ required: fixes GHSA-rqfh-9r24-8c9r (XXE in isXmlEqualTo) -->
+        <assertj.version>3.27.7</assertj.version>
         <mockito.version>5.12.0</mockito.version>
 
         <!-- Plugin versions -->
