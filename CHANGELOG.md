@@ -7,6 +7,15 @@ Prompt versioning rule: judge prompt wording is never changed in place.
 A wording change ships as a new `JudgePromptLibrary` constant (`_V2`, `_V3`…)
 and is recorded here, so scores stay comparable across library versions.
 
+## [0.2.1] - 2026-06
+
+Same feature set as 0.2.0 (which was never consumable: the JitPack build
+failed before the Maven Wrapper was added). Use this version.
+
+### Fixed
+- JitPack build: added Maven Wrapper 3.9.9 (JitPack's default Maven 3.6.3
+  failed the enforcer rule requiring Maven ≥ 3.9).
+
 ## [0.2.0] - 2026-06
 
 Foundation milestone: RAGUnit becomes a credible measurement tool for
