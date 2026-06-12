@@ -7,7 +7,11 @@ Prompt versioning rule: judge prompt wording is never changed in place.
 A wording change ships as a new `JudgePromptLibrary` constant (`_V2`, `_V3`…)
 and is recorded here, so scores stay comparable across library versions.
 
-## [Unreleased]
+## [0.2.0] - 2026-06
+
+Foundation milestone: RAGUnit becomes a credible measurement tool for
+LLM-as-a-judge — visible prompts, variance control, structured results,
+and a generic (non-RAG-shaped) evaluation API.
 
 ### Added
 - Deterministic assertion helpers on `AnswerAssert`: `contains(...)`,
