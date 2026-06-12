@@ -133,6 +133,80 @@ public final class AnswerAssert {
     }
 
     /**
+     * Deterministic check: asserts that the answer text contains the given substring.
+     * Runs instantly, without any LLM call — combine hard checks like this with
+     * judged assertions for the right balance of rigor and cost.
+     *
+     * @param expected the substring the answer must contain
+     * @return this, for chaining
+     * @throws AssertionError if the answer does not contain {@code expected}
+     */
+    public AnswerAssert contains(String expected) {
+        Objects.requireNonNull(expected, "expected");
+        if (!answer.text().contains(expected)) {
+            throw new AssertionError(deterministicMessage(
+                    "Answer does not contain \"%s\"".formatted(expected)));
+        }
+        return this;
+    }
+
+    /**
+     * Deterministic check: asserts that the answer text contains every given substring.
+     *
+     * @param expected the substrings the answer must contain
+     * @return this, for chaining
+     * @throws AssertionError if any substring is missing; the message lists the missing ones
+     */
+    public AnswerAssert containsAll(String... expected) {
+        Objects.requireNonNull(expected, "expected");
+        List<String> missing = java.util.Arrays.stream(expected)
+                .filter(text -> !answer.text().contains(text))
+                .toList();
+        if (!missing.isEmpty()) {
+            throw new AssertionError(deterministicMessage(
+                    "Answer is missing expected texts: " + missing));
+        }
+        return this;
+    }
+
+    /**
+     * Deterministic check: asserts that the whole answer text matches the given
+     * regular expression (same semantics as {@link String#matches(String)}).
+     *
+     * @param regex the regular expression the answer must match
+     * @return this, for chaining
+     * @throws AssertionError if the answer does not match {@code regex}
+     */
+    public AnswerAssert matches(String regex) {
+        Objects.requireNonNull(regex, "regex");
+        if (!answer.text().matches(regex)) {
+            throw new AssertionError(deterministicMessage(
+                    "Answer does not match regex \"%s\"".formatted(regex)));
+        }
+        return this;
+    }
+
+    /**
+     * Deterministic check: asserts that the answer text has at least the given length.
+     *
+     * @param minLength the minimum acceptable answer length in characters
+     * @return this, for chaining
+     * @throws AssertionError if the answer is shorter than {@code minLength}
+     */
+    public AnswerAssert hasMinLength(int minLength) {
+        if (answer.text().length() < minLength) {
+            throw new AssertionError(deterministicMessage(
+                    "Answer length %d is below minimum %d"
+                            .formatted(answer.text().length(), minLength)));
+        }
+        return this;
+    }
+
+    private String deterministicMessage(String failure) {
+        return failure + " — answer: \"" + answer.text() + "\"";
+    }
+
+    /**
      * Asserts that the answer is faithful to the given context.
      *
      * @param threshold minimum acceptable faithfulness score in [0.0, 1.0]

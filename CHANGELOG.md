@@ -10,6 +10,11 @@ and is recorded here, so scores stay comparable across library versions.
 ## [Unreleased]
 
 ### Added
+- Deterministic assertion helpers on `AnswerAssert`: `contains(...)`,
+  `containsAll(...)`, `matches(regex)`, `hasMinLength(n)` — hard checks that
+  run without any LLM call and chain freely with the judged assertions.
+  New `RagAssert.assertThatAnswer(String)` overload for plain-text outputs.
+  No external assertion dependency added. (T2.2)
 - Generic evaluation API: `Judge.evaluate(JudgeQuery)` returns a `JudgeResult`.
   `JudgeQuery` (builder-built) carries a `Criterion` — the named evaluation
   question — plus arbitrary named inputs, so any (input / output / reference)

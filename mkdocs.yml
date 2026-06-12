@@ -56,6 +56,7 @@ nav:
   - Custom Prompts: custom-prompts.md
   - Variance Control: variance-control.md
   - Generic Evaluation: judge-query.md
+  - Deterministic Assertions: deterministic-assertions.md
   - Contributing: contributing.md
 
 plugins:
