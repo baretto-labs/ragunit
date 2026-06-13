@@ -6,7 +6,7 @@
 
     <groupId>org.ragunit</groupId>
     <artifactId>ragunit</artifactId>
-    <version>0.2.1</version>
+    <version>0.3.0</version>
     <packaging>pom</packaging>
 
     <name>RAGUnit</name>
@@ -24,7 +24,7 @@
     <developers>
         <developer>
             <id>baretto-labs</id>
-            <name>Baretto Labs</name>
+            <name>Baretto</name>
             <url>https://github.com/baretto-labs</url>
         </developer>
     </developers>
@@ -39,6 +39,7 @@
     <modules>
         <module>ragunit-core</module>
         <module>ragunit-embedding</module>
+        <module>ragunit-cloud</module>
         <module>ragunit-examples</module>
     </modules>
 

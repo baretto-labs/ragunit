@@ -1,9 +1,10 @@
 # RAGUnit
 
-**The LLM evaluation library for the JVM — Java-native, 100% local, zero cloud dependency.**
+**The LLM evaluation library for the JVM — Java-native, local-first, auditable.**
 
 RAGUnit integrates into your JUnit 5 test suite and evaluates your LLM pipeline using an LLM-as-judge.
-No Python. No API key. No data leaves your infrastructure.
+No Python. **Local-first** with Ollama — your data stays on your machine — or plug any
+OpenAI-compatible API (OpenAI, Claude, Gemini, Groq, vLLM…) when you want a hosted frontier judge.
 
 [![Build](https://github.com/baretto-labs/ragunit/actions/workflows/ci.yml/badge.svg)](https://github.com/baretto-labs/ragunit/actions/workflows/ci.yml)
 [![JitPack](https://jitpack.io/v/baretto-labs/ragunit.svg)](https://jitpack.io/#baretto-labs/ragunit)
@@ -101,10 +102,26 @@ result.justification();   // why this score
 `ragunit-core` has **zero production dependencies** — consumers pull no transitive
 dependency at all. Pure Java 17, JDK `HttpClient` only.
 
-## Integrations
+## Providers
 
-`OllamaJudge` built-in — zero dependencies, 100% local. Implement `RagJudge`
-(or just `Judge`) to plug any other LLM framework — about 50 lines.
+Local-first, your choice — same API whichever backend you pick:
+
+| Judge | Module | Backend |
+|---|---|---|
+| `OllamaJudge` | `ragunit-core` | Local Ollama — private by default, zero deps |
+| `OpenAiCompatibleJudge` | `ragunit-cloud` | Any OpenAI-compatible API: OpenAI, Azure, Groq, Together, OpenRouter, **Claude & Gemini** (via their OpenAI-compatible endpoints), vLLM/LM Studio… |
+
+```java
+// Hosted frontier judge — one class for every OpenAI-compatible provider
+RagJudge judge = OpenAiCompatibleJudge.builder()
+        .baseUrl("https://api.openai.com/v1")   // or Groq, OpenRouter, Claude, Gemini…
+        .apiKey(System.getenv("OPENAI_API_KEY"))
+        .model("gpt-4o-mini")
+        .build();
+```
+
+Need another backend? Implement `RagJudge`, or extend `HttpJudge` and supply four wire
+methods — that's how both built-in judges are built. See [docs/providers.md](docs/providers.md).
 
 ## Contributing
 

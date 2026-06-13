@@ -7,6 +7,30 @@ Prompt versioning rule: judge prompt wording is never changed in place.
 A wording change ships as a new `JudgePromptLibrary` constant (`_V2`, `_V3`…)
 and is recorded here, so scores stay comparable across library versions.
 
+## [0.3.0] - 2026-06
+
+Local-first, your choice: RAGUnit still defaults to fully local judging with
+Ollama, and now also evaluates against any OpenAI-compatible API.
+
+### Added
+- `ragunit-cloud` module with `OpenAiCompatibleJudge`: one judge for any
+  OpenAI-compatible Chat Completions API — OpenAI, Azure OpenAI, Groq, Together,
+  OpenRouter, Fireworks, local servers (vLLM, LM Studio), and Anthropic Claude /
+  Google Gemini via their OpenAI-compatible endpoints. Configured by
+  `baseUrl` + `model` + optional `apiKey` (Bearer; omitted for keyless local
+  servers). Zero dependencies beyond `ragunit-core` (JDK HttpClient only).
+- `HttpJudge`: public abstract base in `ragunit-core` holding all
+  provider-independent machinery (prompts, parsing, query dispatch, HTTP). A new
+  provider supplies four wire methods (endpoint, request body, auth headers,
+  response parsing) — roughly thirty lines. Documented extension point.
+
+### Changed
+- `OllamaJudge` now extends `HttpJudge`; its public API (constructors, builder)
+  is unchanged. Response parsing hardened with an escape-aware string extractor
+  (`extractJsonString`) shared across providers.
+- Positioning: "100% local" → "local-first, your choice". Local Ollama remains
+  the default and the privacy/EU-AI-Act story; cloud is opt-in.
+
 ## [0.2.1] - 2026-06
 
 Same feature set as 0.2.0 (which was never consumable: the JitPack build

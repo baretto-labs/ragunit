@@ -168,6 +168,15 @@ class OllamaJudgeTest {
     }
 
     @Test
+    void should_throwJudgeException_when_contentValueIsUnterminated() {
+        registerHandler("{\"message\":{\"content\":\"no closing quote here");
+
+        assertThatThrownBy(() -> judge().evaluateRetrieval(QUESTION, CONTEXT))
+                .isInstanceOf(JudgeException.class)
+                .hasMessageContaining("unterminated");
+    }
+
+    @Test
     void should_useDefaultHostAndPort_when_constructedWithModelOnly() {
         assertThat(OllamaJudge.DEFAULT_HOST).isEqualTo("localhost");
         assertThat(OllamaJudge.DEFAULT_PORT).isEqualTo(OLLAMA_DEFAULT_PORT);

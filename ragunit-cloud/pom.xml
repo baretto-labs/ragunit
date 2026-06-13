@@ -10,12 +10,15 @@
         <version>0.3.0</version>
     </parent>
 
-    <artifactId>ragunit-embedding</artifactId>
-    <name>RAGUnit Embedding</name>
+    <artifactId>ragunit-cloud</artifactId>
+    <name>RAGUnit Cloud</name>
     <description>
-        Optional embedding-based metrics for RAGUnit.
-        Provides SemanticSimilarity scoring via cosine similarity on embeddings
-        produced by the Ollama embeddings API. Zero dependencies beyond ragunit-core.
+        Optional cloud judges for RAGUnit. Provides OpenAiCompatibleJudge, which works
+        with any OpenAI-compatible Chat Completions API: OpenAI, Azure OpenAI, Groq,
+        Together, OpenRouter, local servers (vLLM, LM Studio), and Anthropic / Google
+        Gemini via their OpenAI-compatible endpoints. Zero dependencies beyond
+        ragunit-core (JDK HttpClient only). Local-first remains the default with the
+        Ollama judge in ragunit-core; this module is opt-in.
     </description>
 
     <dependencies>

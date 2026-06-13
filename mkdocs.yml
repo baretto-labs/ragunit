@@ -1,21 +1,25 @@
 site_name: RAGUnit
 site_description: The evaluation library for RAG pipelines — Java-native, 100% local, zero cloud dependency.
 site_url: https://ragunit.org/
+copyright: Copyright &copy; 2026 Baretto — Apache 2.0
 repo_url: https://github.com/baretto-labs/ragunit
 repo_name: baretto-labs/ragunit
 edit_uri: ""
 
 theme:
   name: material
+  font:
+    text: Inter
+    code: JetBrains Mono
   palette:
     - scheme: default
-      primary: indigo
+      primary: black
       accent: indigo
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
     - scheme: slate
-      primary: indigo
+      primary: black
       accent: indigo
       toggle:
         icon: material/brightness-4
@@ -25,11 +29,13 @@ theme:
     - navigation.tabs
     - navigation.sections
     - navigation.top
+    - navigation.footer
+    - toc.follow
     - search.highlight
     - search.suggest
     - content.code.copy
     - content.code.annotate
-  logo: assets/logo.png
+  logo: assets/logo-baretto.png
   favicon: assets/favicon.png
 
 nav:
@@ -47,23 +53,30 @@ nav:
     - Context Recall: metrics/context-recall.md
     - Factual Correctness: metrics/factual-correctness.md
     - Semantic Similarity: metrics/semantic-similarity.md
-  - Testset Generation: testset-generation.md
-  - Cookbook: cookbook.md
-  - Integrations:
-    - Overview: integrations/index.md
+  - Guides:
+    - Cookbook: cookbook.md
+    - Variance Control: variance-control.md
+    - Custom Prompts: custom-prompts.md
+    - Generic Evaluation: judge-query.md
+    - Deterministic Assertions: deterministic-assertions.md
+    - Testset Generation: testset-generation.md
+  - Providers:
+    - Overview: providers.md
     - Ollama: integrations/ollama.md
     - Custom Adapters: integrations/adapters.md
-  - Custom Prompts: custom-prompts.md
-  - Variance Control: variance-control.md
-  - Generic Evaluation: judge-query.md
-  - Deterministic Assertions: deterministic-assertions.md
   - Contributing: contributing.md
+
+extra_css:
+  - stylesheets/extra.css
 
 plugins:
   - search
 
 markdown_extensions:
   - admonition
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
   - pymdownx.details
   - pymdownx.superfences
   - pymdownx.highlight:

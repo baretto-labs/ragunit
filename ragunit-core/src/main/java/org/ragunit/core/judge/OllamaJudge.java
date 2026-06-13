@@ -1,23 +1,6 @@
 package org.ragunit.core.judge;
 
-import org.ragunit.core.domain.Answer;
-import org.ragunit.core.domain.Document;
-import org.ragunit.core.domain.FactualCorrectnessVerdict;
-import org.ragunit.core.domain.PromptContext;
-import org.ragunit.core.domain.Question;
-import org.ragunit.core.domain.ReferenceAnswer;
-import org.ragunit.core.domain.ToolCall;
-import org.ragunit.core.domain.Verdict;
-
-import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.EnumMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -31,12 +14,11 @@ import java.util.Objects;
  * <p>Every prompt comes from {@link JudgePromptLibrary} — visible, versioned, and
  * overridable per metric via {@link #builder()} or the template-map constructors.
  *
- * <p>Uses the JDK built-in {@link HttpClient} — zero extra dependencies.
- * Any network or parse failure is wrapped in a {@link JudgeException}.
- * The response is parsed by {@link VerdictParser}, which degrades gracefully on
- * malformed JSON rather than throwing.
+ * <p>Local and private by design: no data leaves the host running Ollama.
+ * The provider-independent machinery (prompts, parsing, query dispatch, HTTP) lives
+ * in {@link HttpJudge}.
  */
-public final class OllamaJudge implements RagJudge {
+public final class OllamaJudge extends HttpJudge {
 
     /** Default host when none is specified. */
     static final String DEFAULT_HOST = "localhost";
@@ -44,24 +26,7 @@ public final class OllamaJudge implements RagJudge {
     /** Default Ollama port when none is specified. */
     static final int DEFAULT_PORT = 11434;
 
-    /** Request timeout in seconds. LLM inference on large models can be slow. */
-    private static final int REQUEST_TIMEOUT_SECONDS = 60;
-
-    /** Maximum accepted response body size (1 MB). Guards against runaway responses. */
-    private static final int MAX_RESPONSE_BYTES = 1024 * 1024;
-
-    /**
-     * Default sampling temperature. Zero is the recommended setting for an
-     * LLM-as-judge: it minimizes run-to-run variance, making scores as
-     * reproducible as the model allows.
-     */
-    static final double DEFAULT_TEMPERATURE = 0.0;
-
-    private final String model;
     private final String baseUrl;
-    private final HttpClient httpClient;
-    private final Map<MetricType, JudgePromptTemplate> templates;
-    private final double temperature;
 
     /**
      * Creates an OllamaJudge connecting to {@code localhost:11434} with default prompts.
@@ -107,11 +72,8 @@ public final class OllamaJudge implements RagJudge {
 
     private OllamaJudge(String model, String host, int port,
                         Map<MetricType, JudgePromptTemplate> templates, double temperature) {
-        this.model = Objects.requireNonNull(model, "model");
+        super(model, temperature, templates);
         this.baseUrl = "http://" + Objects.requireNonNull(host, "host") + ":" + port;
-        this.httpClient = HttpClient.newHttpClient();
-        this.templates = mergeWithDefaults(Objects.requireNonNull(templates, "templates"));
-        this.temperature = temperature;
     }
 
     /**
@@ -130,181 +92,28 @@ public final class OllamaJudge implements RagJudge {
         return new Builder();
     }
 
-    private static Map<MetricType, JudgePromptTemplate> mergeWithDefaults(
-            Map<MetricType, JudgePromptTemplate> overrides) {
-        Map<MetricType, JudgePromptTemplate> merged = new EnumMap<>(JudgePromptLibrary.defaults());
-        merged.putAll(overrides);
-        return Map.copyOf(merged);
+    @Override
+    protected String endpointUrl() {
+        return baseUrl + "/api/chat";
     }
 
     @Override
-    public Verdict evaluateRetrieval(Question question, List<Document> context) {
-        return callOllama(render(MetricType.RETRIEVAL, PromptContext.forRetrieval(question, context)));
-    }
-
-    @Override
-    public Verdict evaluateGeneration(Question question, List<Document> context, Answer answer) {
-        return callOllama(render(MetricType.GENERATION,
-                PromptContext.forGeneration(question, context, answer)));
-    }
-
-    @Override
-    public Verdict evaluateContextRejection(Question question, List<Document> context) {
-        return callOllama(render(MetricType.CONTEXT_REJECTION,
-                PromptContext.forRetrieval(question, context)));
-    }
-
-    @Override
-    public Verdict evaluateRejection(Question question, List<Document> context, Answer answer) {
-        return callOllama(render(MetricType.REJECTION,
-                PromptContext.forGeneration(question, context, answer)));
-    }
-
-    @Override
-    public Verdict evaluateContextRecall(Question question, List<Document> context, ReferenceAnswer reference) {
-        return callOllama(render(MetricType.CONTEXT_RECALL,
-                PromptContext.forContextRecall(question, context, reference)));
-    }
-
-    @Override
-    public Verdict evaluateAnswerRelevancy(Question question, Answer answer) {
-        return callOllama(render(MetricType.ANSWER_RELEVANCY,
-                PromptContext.forGeneration(question, List.of(), answer)));
-    }
-
-    @Override
-    public Verdict evaluateContextPrecision(Question question, List<Document> context) {
-        String prompt = render(MetricType.CONTEXT_PRECISION, PromptContext.forRetrieval(question, context));
-        String response = rawOllamaCall(prompt);
-        return VerdictParser.parse(response, model, context).withExchange(prompt, response);
-    }
-
-    @Override
-    public FactualCorrectnessVerdict evaluateFactualCorrectness(
-            Question question, Answer answer, ReferenceAnswer reference) {
-        String prompt = render(MetricType.FACTUAL_CORRECTNESS,
-                PromptContext.forFactualCorrectness(question, answer, reference));
-        return VerdictParser.parseFactualCorrectness(rawOllamaCall(prompt), model);
-    }
-
-    @Override
-    public Verdict evaluateToolTrajectory(Question question, List<ToolCall> trajectory, Answer answer) {
-        return callOllama(render(MetricType.TOOL_TRAJECTORY,
-                PromptContext.forToolTrajectory(question, trajectory, answer)));
-    }
-
-    @Override
-    public Verdict evaluateContextPromptInjection(Question question, List<Document> context) {
-        return callOllama(render(MetricType.CONTEXT_PROMPT_INJECTION,
-                PromptContext.forRetrieval(question, context)));
-    }
-
-    @Override
-    public Verdict evaluatePromptInjection(Question question, List<Document> context, Answer answer) {
-        return callOllama(render(MetricType.PROMPT_INJECTION,
-                PromptContext.forGeneration(question, context, answer)));
-    }
-
-    @Override
-    public Verdict evaluateContextPIILeak(Question question, List<Document> context) {
-        return callOllama(render(MetricType.CONTEXT_PII_LEAK,
-                PromptContext.forRetrieval(question, context)));
-    }
-
-    @Override
-    public Verdict evaluatePIILeak(Question question, List<Document> context, Answer answer) {
-        return callOllama(render(MetricType.PII_LEAK,
-                PromptContext.forGeneration(question, context, answer)));
-    }
-
-    /**
-     * Evaluates a generic query. Built-in {@link MetricType} criteria use the
-     * configured per-metric prompt templates; any other {@link Criterion} is
-     * judged with the generic {@link JudgePromptLibrary#criterionPromptV1(JudgeQuery)}
-     * prompt.
-     *
-     * @param query the criterion and named inputs to judge
-     * @return the full verdict, carrying the exact prompt and raw response
-     */
-    @Override
-    public Verdict verdictFor(JudgeQuery query) {
-        if (query.criterion() instanceof MetricType) {
-            return RagJudge.super.verdictFor(query);
-        }
-        return callOllama(JudgePromptLibrary.criterionPromptV1(query));
-    }
-
-    private String render(MetricType type, PromptContext ctx) {
-        return templates.get(type).render(ctx);
-    }
-
-    private Verdict callOllama(String prompt) {
-        String response = rawOllamaCall(prompt);
-        return VerdictParser.parse(response, model).withExchange(prompt, response);
-    }
-
-    private String rawOllamaCall(String prompt) {
-        String requestBody = buildRequestBody(prompt);
-        try {
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(baseUrl + "/api/chat"))
-                    .header("Content-Type", "application/json")
-                    .timeout(Duration.ofSeconds(REQUEST_TIMEOUT_SECONDS))
-                    .POST(HttpRequest.BodyPublishers.ofString(requestBody))
-                    .build();
-            HttpResponse<String> response = httpClient.send(request, limitedBodyHandler());
-            return extractContent(response.body());
-        } catch (IOException e) {
-            throw new JudgeException("Ollama HTTP call failed: " + e.getMessage(), e);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new JudgeException("Ollama HTTP call interrupted", e);
-        }
-    }
-
-    private static HttpResponse.BodyHandler<String> limitedBodyHandler() {
-        return info -> HttpResponse.BodySubscribers.mapping(
-                HttpResponse.BodySubscribers.ofByteArray(),
-                bytes -> {
-                    if (bytes.length > MAX_RESPONSE_BYTES) {
-                        throw new JudgeException(
-                                "Ollama response exceeds size limit (%d bytes)".formatted(MAX_RESPONSE_BYTES));
-                    }
-                    return new String(bytes, StandardCharsets.UTF_8);
-                });
-    }
-
-    private String buildRequestBody(String prompt) {
+    protected String buildRequestBody(String prompt) {
         return """
                 {"model":"%s","messages":[{"role":"user","content":"%s"}],\
                 "stream":false,"options":{"temperature":%s}}\
-                """.formatted(escapeJson(model), escapeJson(prompt), temperature);
+                """.formatted(escapeJson(model()), escapeJson(prompt), temperature());
     }
 
-    private static String extractContent(String responseBody) {
-        // Parses: {"message":{"role":"...","content":"<content>"}}
-        int contentKey = responseBody.indexOf("\"content\":\"");
-        if (contentKey == -1) {
-            throw new JudgeException("Failed to parse Ollama response: missing 'content' key");
-        }
-        int start = contentKey + "\"content\":\"".length();
-        int end = responseBody.indexOf("\"}", start);
-        if (end == -1) {
-            throw new JudgeException("Failed to parse Ollama response: unterminated content value");
-        }
-        return responseBody.substring(start, end)
-                .replace("\\n", "\n")
-                .replace("\\\"", "\"")
-                .replace("\\\\", "\\");
+    @Override
+    protected String[] authorizationHeaders() {
+        return new String[0];
     }
 
-    private static String escapeJson(String value) {
-        return value
-                .replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .replace("\t", "\\t");
+    @Override
+    protected String extractContent(String responseBody) {
+        // Ollama replies: {"message":{"role":"...","content":"<content>"}}
+        return extractJsonString(responseBody, "content");
     }
 
     /**

@@ -70,6 +70,8 @@ Any deviation requires a comment explaining why.
 | **JudgePromptLibrary** | The library of built-in, versioned judge prompts — one public constant per metric (`FAITHFULNESS_V1`…) | Prompt wording never changes in place; a change ships as a new `_Vn` constant |
 | **ScoreStatistics** | Mean, population stddev, and run count aggregated over repeated judge runs of one evaluation | Variance control: `withRuns(n)` / `withMaxStddev(x)` |
 | **JudgeResult** | Structured, inspection-friendly view of one judge evaluation: score, justification, exact prompt, raw response | Deliberate exception to the `Result` ban — generic judge-output contract (v0.2) |
+| **HttpJudge** | Abstract base for judges that call an HTTP chat endpoint; owns prompts, parsing, dispatch, HTTP. Subclass supplies the wire format | `OllamaJudge`, `OpenAiCompatibleJudge` extend it (v0.3) |
+| **OpenAiCompatibleJudge** | Judge for any OpenAI-compatible Chat Completions API (`baseUrl` + `model` + optional key) | `ragunit-cloud`; impl carries the infra detail, like `OllamaJudge` |
 
 ---
 
@@ -107,3 +109,7 @@ These names are banned because they are too generic or violate DDD principles:
 `ScoreStatistics` — variance control over repeated judge runs (mean + stddev)
 `JudgeResult` — structured judge output (score, justification, prompt, raw response)
 `Judge`, `Criterion`, `JudgeQuery` — generic, non-RAG-shaped evaluation contract
+
+### v0.3 (ragunit-cloud)
+`HttpJudge` — abstract base for HTTP chat judges (extension point)
+`OpenAiCompatibleJudge` — judge for any OpenAI-compatible Chat Completions API
