@@ -24,6 +24,25 @@ and the only mode that keeps you fully in-house for EU AI Act purposes.
 
 ---
 
+## Request timeout
+
+One judge call is one LLM inference, and a local model is slow: a 14B judge answering a
+faithfulness query on a laptop routinely needs more than a minute. The default is 60
+seconds — `HttpJudge.DEFAULT_TIMEOUT`. Raise it whenever the judge is a large local model.
+
+```java
+RagJudge judge = OllamaJudge.builder()
+        .model("qwen2.5:14b")
+        .timeout(Duration.ofMinutes(3))
+        .build();
+```
+
+The same setting exists on `OpenAiCompatibleJudge.builder()`. A call that exceeds the
+timeout raises `JudgeException` — it never scores zero, because a timeout is an outage,
+not a measurement, and averaging it into a benchmark would read as a quality collapse.
+
+---
+
 ## OpenAiCompatibleJudge — one judge, every OpenAI-compatible API
 
 `OpenAiCompatibleJudge` talks to `POST {baseUrl}/chat/completions`. **Any** provider

@@ -7,6 +7,22 @@ Prompt versioning rule: judge prompt wording is never changed in place.
 A wording change ships as a new `JudgePromptLibrary` constant (`_V2`, `_V3`…)
 and is recorded here, so scores stay comparable across library versions.
 
+## [Unreleased]
+
+### Added
+- `timeout(Duration)` on `OllamaJudge.Builder` and `OpenAiCompatibleJudge.Builder`, a
+  `HttpJudge` constructor overload taking the timeout, and the public constant
+  `HttpJudge.DEFAULT_TIMEOUT` (60 s — the previous hardcoded value, unchanged).
+
+### Fixed
+- The request timeout was a private constant of `HttpJudge`, so a judge could not be
+  given more than 60 seconds. Judging a code-retrieval benchmark with `qwen2.5:14b` on a
+  laptop timed out on 51 calls out of 60 — the local-first path the library recommends
+  first. A call that exceeds the timeout still raises `JudgeException`; it never scores
+  zero, because an outage is not a measurement.
+
+No prompt wording changed: scores stay comparable with 0.3.0.
+
 ## [0.3.0] - 2026-06
 
 Local-first, your choice: RAGUnit still defaults to fully local judging with

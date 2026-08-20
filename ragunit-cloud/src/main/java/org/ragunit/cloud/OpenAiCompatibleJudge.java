@@ -6,6 +6,7 @@ import org.ragunit.core.judge.JudgePromptTemplate;
 import org.ragunit.core.judge.MetricType;
 import org.ragunit.core.judge.RagJudge;
 
+import java.time.Duration;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.Objects;
@@ -49,7 +50,7 @@ public final class OpenAiCompatibleJudge extends HttpJudge {
 
     private OpenAiCompatibleJudge(Builder builder) {
         super(Objects.requireNonNull(builder.model, "model is required"),
-                builder.temperature, builder.prompts);
+                builder.temperature, builder.prompts, builder.timeout);
         String baseUrl = Objects.requireNonNull(builder.baseUrl, "baseUrl is required");
         this.chatCompletionsUrl = stripTrailingSlash(baseUrl) + "/chat/completions";
         this.apiKey = Optional.ofNullable(builder.apiKey);
@@ -105,6 +106,7 @@ public final class OpenAiCompatibleJudge extends HttpJudge {
         private String model;
         private String apiKey;
         private double temperature = DEFAULT_TEMPERATURE;
+        private Duration timeout = DEFAULT_TIMEOUT;
         private final Map<MetricType, JudgePromptTemplate> prompts = new EnumMap<>(MetricType.class);
 
         private Builder() {
@@ -149,6 +151,25 @@ public final class OpenAiCompatibleJudge extends HttpJudge {
          * Sets the sampling temperature (defaults to {@code 0.0}, recommended for a judge).
          *
          * @param samplingTemperature the temperature sent to the provider
+         * @return this, for chaining
+         */
+        /**
+         * Sets how long one judge call may take before it is abandoned
+         * (defaults to {@link HttpJudge#DEFAULT_TIMEOUT}).
+         *
+         * @param requestTimeout the per-call timeout; must be strictly positive
+         * @return this, for chaining
+         * @throws IllegalArgumentException if the timeout is zero or negative
+         */
+        public Builder timeout(Duration requestTimeout) {
+            this.timeout = HttpJudge.requirePositive(requestTimeout);
+            return this;
+        }
+
+        /**
+         * Sets the sampling temperature.
+         *
+         * @param samplingTemperature the sampling temperature
          * @return this, for chaining
          */
         public Builder temperature(double samplingTemperature) {
