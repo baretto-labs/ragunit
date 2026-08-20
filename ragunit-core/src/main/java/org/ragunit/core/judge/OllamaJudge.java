@@ -1,6 +1,7 @@
 package org.ragunit.core.judge;
 
 import java.util.EnumMap;
+import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
 
@@ -67,13 +68,18 @@ public final class OllamaJudge extends HttpJudge {
      * @param templates custom templates keyed by metric type; missing keys fall back to defaults
      */
     public OllamaJudge(String model, String host, int port, Map<MetricType, JudgePromptTemplate> templates) {
-        this(model, host, port, templates, DEFAULT_TEMPERATURE);
+        this(model, baseUrlOf(host, port), templates, DEFAULT_TEMPERATURE, DEFAULT_TIMEOUT);
     }
 
-    private OllamaJudge(String model, String host, int port,
-                        Map<MetricType, JudgePromptTemplate> templates, double temperature) {
-        super(model, temperature, templates);
-        this.baseUrl = "http://" + Objects.requireNonNull(host, "host") + ":" + port;
+    private OllamaJudge(String model, String baseUrl,
+                        Map<MetricType, JudgePromptTemplate> templates,
+                        double temperature, Duration timeout) {
+        super(model, temperature, templates, timeout);
+        this.baseUrl = baseUrl;
+    }
+
+    private static String baseUrlOf(String host, int port) {
+        return "http://" + Objects.requireNonNull(host, "host") + ":" + port;
     }
 
     /**
@@ -128,6 +134,7 @@ public final class OllamaJudge extends HttpJudge {
         private String host = DEFAULT_HOST;
         private int port = DEFAULT_PORT;
         private double temperature = DEFAULT_TEMPERATURE;
+        private Duration timeout = DEFAULT_TIMEOUT;
         private final Map<MetricType, JudgePromptTemplate> prompts = new EnumMap<>(MetricType.class);
 
         private Builder() {
@@ -225,6 +232,23 @@ public final class OllamaJudge extends HttpJudge {
         }
 
         /**
+         * Sets how long one judge call may take before it is abandoned
+         * (defaults to {@link HttpJudge#DEFAULT_TIMEOUT}).
+         *
+         * <p>Raise it when judging with a large local model: a 14B model answering a
+         * faithfulness query on a laptop routinely needs more than the default minute,
+         * and every call then fails as a timeout rather than returning a low score.
+         *
+         * @param requestTimeout the per-call timeout; must be strictly positive
+         * @return this, for chaining
+         * @throws IllegalArgumentException if the timeout is zero or negative
+         */
+        public Builder timeout(Duration requestTimeout) {
+            this.timeout = HttpJudge.requirePositive(requestTimeout);
+            return this;
+        }
+
+        /**
          * Builds the judge.
          *
          * @return a configured {@link OllamaJudge}
@@ -232,7 +256,7 @@ public final class OllamaJudge extends HttpJudge {
          */
         public OllamaJudge build() {
             return new OllamaJudge(Objects.requireNonNull(model, "model is required"),
-                    host, port, prompts, temperature);
+                    baseUrlOf(host, port), prompts, temperature, timeout);
         }
     }
 }

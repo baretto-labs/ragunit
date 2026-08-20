@@ -41,8 +41,12 @@ import java.util.Objects;
  */
 public abstract class HttpJudge implements RagJudge {
 
-    /** Request timeout in seconds. LLM inference on large models can be slow. */
-    private static final int REQUEST_TIMEOUT_SECONDS = 60;
+    /**
+     * Request timeout applied when none is configured. LLM inference is slow, and a local
+     * model is slower still: a 14B judge answering on a laptop can need more than a minute,
+     * which is why {@link #timeout()} is configurable per judge.
+     */
+    public static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(60);
 
     /** Maximum accepted response body size (1 MB). Guards against runaway responses. */
     private static final int MAX_RESPONSE_BYTES = 1024 * 1024;
@@ -56,6 +60,7 @@ public abstract class HttpJudge implements RagJudge {
 
     private final String model;
     private final double temperature;
+    private final Duration timeout;
     private final HttpClient httpClient;
     private final Map<MetricType, JudgePromptTemplate> templates;
 
@@ -69,10 +74,41 @@ public abstract class HttpJudge implements RagJudge {
      */
     protected HttpJudge(String model, double temperature,
                         Map<MetricType, JudgePromptTemplate> templates) {
+        this(model, temperature, templates, DEFAULT_TIMEOUT);
+    }
+
+    /**
+     * Creates a judge with an explicit request timeout.
+     *
+     * @param model       the model identifier embedded in every verdict
+     * @param temperature the sampling temperature passed to the provider
+     * @param templates   per-metric prompt overrides; missing keys fall back to
+     *                    {@link JudgePromptLibrary} defaults
+     * @param timeout     how long one judge call may take before it is abandoned; the builders
+     *                    validate it with {@link #requirePositive(Duration)} before calling this
+     */
+    protected HttpJudge(String model, double temperature,
+                        Map<MetricType, JudgePromptTemplate> templates, Duration timeout) {
         this.model = Objects.requireNonNull(model, "model");
         this.temperature = temperature;
+        this.timeout = Objects.requireNonNull(timeout, "timeout");
         this.httpClient = HttpClient.newHttpClient();
         this.templates = mergeWithDefaults(Objects.requireNonNull(templates, "templates"));
+    }
+
+    /**
+     * Validates a request timeout.
+     *
+     * @param timeout the candidate timeout
+     * @return the same timeout when it is strictly positive
+     * @throws IllegalArgumentException if it is zero or negative
+     */
+    public static Duration requirePositive(Duration timeout) {
+        Objects.requireNonNull(timeout, "timeout");
+        if (timeout.isZero() || timeout.isNegative()) {
+            throw new IllegalArgumentException("timeout must be strictly positive, was " + timeout);
+        }
+        return timeout;
     }
 
     private static Map<MetricType, JudgePromptTemplate> mergeWithDefaults(
@@ -80,6 +116,15 @@ public abstract class HttpJudge implements RagJudge {
         Map<MetricType, JudgePromptTemplate> merged = new EnumMap<>(JudgePromptLibrary.defaults());
         merged.putAll(overrides);
         return Map.copyOf(merged);
+    }
+
+    /**
+     * How long one judge call may take before it is abandoned.
+     *
+     * @return the configured request timeout
+     */
+    protected final Duration timeout() {
+        return timeout;
     }
 
     /**
@@ -247,7 +292,7 @@ public abstract class HttpJudge implements RagJudge {
             HttpRequest.Builder builder = HttpRequest.newBuilder()
                     .uri(URI.create(endpointUrl()))
                     .header("Content-Type", "application/json")
-                    .timeout(Duration.ofSeconds(REQUEST_TIMEOUT_SECONDS))
+                    .timeout(timeout)
                     .POST(HttpRequest.BodyPublishers.ofString(buildRequestBody(prompt)));
             String[] headers = authorizationHeaders();
             for (int i = 0; i + 1 < headers.length; i += 2) {
