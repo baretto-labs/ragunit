@@ -4,6 +4,7 @@ import java.util.EnumMap;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
+import java.util.OptionalInt;
 
 /**
  * {@link RagJudge} implementation that delegates scoring to a local Ollama model.
@@ -28,6 +29,7 @@ public final class OllamaJudge extends HttpJudge {
     static final int DEFAULT_PORT = 11434;
 
     private final String baseUrl;
+    private final OptionalInt seed;
 
     /**
      * Creates an OllamaJudge connecting to {@code localhost:11434} with default prompts.
@@ -68,14 +70,13 @@ public final class OllamaJudge extends HttpJudge {
      * @param templates custom templates keyed by metric type; missing keys fall back to defaults
      */
     public OllamaJudge(String model, String host, int port, Map<MetricType, JudgePromptTemplate> templates) {
-        this(model, baseUrlOf(host, port), templates, DEFAULT_TEMPERATURE, DEFAULT_TIMEOUT);
+        this(builder().model(model).host(host).port(port).prompts(templates));
     }
 
-    private OllamaJudge(String model, String baseUrl,
-                        Map<MetricType, JudgePromptTemplate> templates,
-                        double temperature, Duration timeout) {
-        super(model, temperature, templates, timeout);
-        this.baseUrl = baseUrl;
+    private OllamaJudge(Builder builder) {
+        super(builder.model, builder.temperature, builder.prompts, builder.timeout);
+        this.baseUrl = baseUrlOf(builder.host, builder.port);
+        this.seed = builder.seed;
     }
 
     private static String baseUrlOf(String host, int port) {
@@ -107,8 +108,13 @@ public final class OllamaJudge extends HttpJudge {
     protected String buildRequestBody(String prompt) {
         return """
                 {"model":"%s","messages":[{"role":"user","content":"%s"}],\
-                "stream":false,"options":{"temperature":%s}}\
-                """.formatted(escapeJson(model()), escapeJson(prompt), temperature());
+                "stream":false,"options":{"temperature":%s%s}}\
+                """.formatted(escapeJson(model()), escapeJson(prompt), temperature(), seedOption());
+    }
+
+    /** Renders the seed as an extra JSON member, or nothing when no seed was configured. */
+    private String seedOption() {
+        return seed.isPresent() ? ",\"seed\":" + seed.getAsInt() : "";
     }
 
     @Override
@@ -135,6 +141,7 @@ public final class OllamaJudge extends HttpJudge {
         private int port = DEFAULT_PORT;
         private double temperature = DEFAULT_TEMPERATURE;
         private Duration timeout = DEFAULT_TIMEOUT;
+        private OptionalInt seed = OptionalInt.empty();
         private final Map<MetricType, JudgePromptTemplate> prompts = new EnumMap<>(MetricType.class);
 
         private Builder() {
@@ -189,6 +196,28 @@ public final class OllamaJudge extends HttpJudge {
         }
 
         /**
+         * Fixes the sampling seed (no seed by default, so Ollama picks one at random).
+         *
+         * <p>What it removes is the sampling randomness. Measured on {@code qwen2.5:14b},
+         * two unseeded runs of one retrieval query at temperature {@code 0.8} scored
+         * {@code 1.0} then {@code 0.95}, while the same pair with a fixed seed returned an
+         * identical verdict. At temperature {@code 0.0} both pairs were already identical,
+         * so a seed changes nothing observable there.
+         *
+         * <p>It is not a determinism guarantee: GPU scheduling and serving-side batching
+         * still move a score, which is why {@code withRuns(n)} remains useful. And a seed
+         * says nothing across a model upgrade or a prompt change — either invalidates a
+         * baseline just as a new seed would.
+         *
+         * @param samplingSeed the Ollama sampling seed; any {@code int}, including zero
+         * @return this, for chaining
+         */
+        public Builder seed(int samplingSeed) {
+            this.seed = OptionalInt.of(samplingSeed);
+            return this;
+        }
+
+        /**
          * Overrides the prompt template for any metric type.
          *
          * @param type     the metric whose prompt to replace
@@ -198,6 +227,12 @@ public final class OllamaJudge extends HttpJudge {
         public Builder prompt(MetricType type, JudgePromptTemplate template) {
             prompts.put(Objects.requireNonNull(type, "type"),
                     Objects.requireNonNull(template, "template"));
+            return this;
+        }
+
+        /** Adds a whole template map at once — the path taken by the public constructors. */
+        Builder prompts(Map<MetricType, JudgePromptTemplate> templates) {
+            prompts.putAll(Objects.requireNonNull(templates, "templates"));
             return this;
         }
 
@@ -255,8 +290,8 @@ public final class OllamaJudge extends HttpJudge {
          * @throws NullPointerException if no model was set
          */
         public OllamaJudge build() {
-            return new OllamaJudge(Objects.requireNonNull(model, "model is required"),
-                    baseUrlOf(host, port), prompts, temperature, timeout);
+            Objects.requireNonNull(model, "model is required");
+            return new OllamaJudge(this);
         }
     }
 }

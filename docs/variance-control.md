@@ -74,6 +74,43 @@ OllamaJudge judge = OllamaJudge.builder()
 
 ---
 
+## `seed(n)` — replay the same measurement
+
+Temperature 0 makes the sampling greedy; it does not fix the seed Ollama draws for each
+request. On `qwen2.5:14b`, a retrieval query judged four times shows what that costs:
+
+| Configuration | Two consecutive runs |
+|---|---|
+| temperature 0, no seed | identical (0.85, then 0.85) |
+| temperature 0.8, `seed(7)` | identical, down to the wording of the rationale |
+| temperature 0.8, no seed | **1.0, then 0.95** |
+
+So at temperature 0 the seed buys nothing observable — greedy sampling is already stable
+on a single host. It earns its place the moment the temperature is not zero, which is
+exactly the setting `withRuns(n)` is meant to probe, and it makes the judge configuration
+explicit rather than implicit. Set a seed when a score has to be **comparable to itself
+over time** — a baseline captured before a change and re-measured after it:
+
+```java
+OllamaJudge judge = OllamaJudge.builder()
+        .model("qwen2.5:14b")
+        .seed(42)           // same prompt, same model, same seed → same verdict
+        .build();
+```
+
+No seed is sent unless you set one, so the default behaviour is unchanged.
+
+A seed only holds the judge still. It does not make two models comparable, and it does
+not survive a model upgrade or a prompt edit: both invalidate a baseline exactly as
+changing the seed would. Record the model, the prompt version, and the seed alongside
+every score you intend to compare later.
+
+!!! warning
+    A seed narrows the variance, it does not remove it — the GPU and batching caveat
+    above still applies. Keep `withRuns(n)` for anything that gates a decision.
+
+---
+
 ## How many runs?
 
 | Runs | Use case |
