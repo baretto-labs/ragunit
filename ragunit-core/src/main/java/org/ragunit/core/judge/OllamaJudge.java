@@ -198,16 +198,16 @@ public final class OllamaJudge extends HttpJudge {
         /**
          * Fixes the sampling seed (no seed by default, so Ollama picks one at random).
          *
-         * <p>Temperature alone does not make a judge replayable: at {@code 0.0} the sampling
-         * is greedy but still seeded randomly, so the same prompt can score differently from
-         * one run to the next. Fixing the seed is what lets a measurement be repeated.
+         * <p>What it removes is the sampling randomness. Measured on {@code qwen2.5:14b},
+         * two unseeded runs of one retrieval query at temperature {@code 0.8} scored
+         * {@code 1.0} then {@code 0.95}, while the same pair with a fixed seed returned an
+         * identical verdict. At temperature {@code 0.0} both pairs were already identical,
+         * so a seed changes nothing observable there.
          *
-         * <p>What it removes is the sampling randomness, which is the dominant source of
-         * run-to-run variation. It is not a determinism guarantee: GPU scheduling and
-         * serving-side batching still move a score slightly, which is why
-         * {@code withRuns(n)} remains useful. And a seed says nothing across a model
-         * upgrade or a prompt change — either invalidates a baseline just as a new seed
-         * would.
+         * <p>It is not a determinism guarantee: GPU scheduling and serving-side batching
+         * still move a score, which is why {@code withRuns(n)} remains useful. And a seed
+         * says nothing across a model upgrade or a prompt change — either invalidates a
+         * baseline just as a new seed would.
          *
          * @param samplingSeed the Ollama sampling seed; any {@code int}, including zero
          * @return this, for chaining

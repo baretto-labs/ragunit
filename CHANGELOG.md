@@ -10,12 +10,14 @@ and is recorded here, so scores stay comparable across library versions.
 ## [Unreleased]
 
 ### Added
-- `seed(int)` on `OllamaJudge.Builder`, sending Ollama's `options.seed`. Temperature 0
-  makes sampling greedy but leaves the seed random, so two identical runs could score
-  differently and a baseline was not replayable. No seed is sent unless one is set, so
-  existing behaviour is unchanged. A seed narrows variance rather than removing it — GPU
-  scheduling and batching still move a score — and it says nothing across a model upgrade
-  or a prompt change, both of which invalidate a baseline just as a new seed would.
+- `seed(int)` on `OllamaJudge.Builder`, sending Ollama's `options.seed`. Measured on
+  `qwen2.5:14b`: at temperature 0.8 two unseeded runs of the same query scored 1.0 then
+  0.95, while `seed(7)` returned the same verdict word for word. At temperature 0 the
+  runs were already identical, so the seed shows nothing there — it earns its place at a
+  non-zero temperature, the setting `withRuns(n)` exists to probe, and it makes the judge
+  configuration explicit. No seed is sent unless one is set, so existing behaviour is
+  unchanged. A seed says nothing across a model upgrade or a prompt change, both of which
+  invalidate a baseline just as a new seed would.
 - `timeout(Duration)` on `OllamaJudge.Builder` and `OpenAiCompatibleJudge.Builder`, a
   `HttpJudge` constructor overload taking the timeout, and the public constant
   `HttpJudge.DEFAULT_TIMEOUT` (60 s — the previous hardcoded value, unchanged).

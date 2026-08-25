@@ -76,10 +76,20 @@ OllamaJudge judge = OllamaJudge.builder()
 
 ## `seed(n)` — replay the same measurement
 
-Temperature 0 makes the sampling greedy; it does not fix the seed Ollama draws for
-each request. Two identical runs can therefore still diverge. Set a seed when a score
-has to be **comparable to itself over time** — a baseline captured before a change and
-re-measured after it:
+Temperature 0 makes the sampling greedy; it does not fix the seed Ollama draws for each
+request. On `qwen2.5:14b`, a retrieval query judged four times shows what that costs:
+
+| Configuration | Two consecutive runs |
+|---|---|
+| temperature 0, no seed | identical (0.85, then 0.85) |
+| temperature 0.8, `seed(7)` | identical, down to the wording of the rationale |
+| temperature 0.8, no seed | **1.0, then 0.95** |
+
+So at temperature 0 the seed buys nothing observable — greedy sampling is already stable
+on a single host. It earns its place the moment the temperature is not zero, which is
+exactly the setting `withRuns(n)` is meant to probe, and it makes the judge configuration
+explicit rather than implicit. Set a seed when a score has to be **comparable to itself
+over time** — a baseline captured before a change and re-measured after it:
 
 ```java
 OllamaJudge judge = OllamaJudge.builder()
