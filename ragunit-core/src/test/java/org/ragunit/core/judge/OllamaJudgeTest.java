@@ -36,6 +36,7 @@ class OllamaJudgeTest {
     private static final double SCORE_075 = 0.75;
     private static final int HTTP_OK = 200;
     private static final int OLLAMA_DEFAULT_PORT = 11434;
+    private static final int SEED = 42;
     private static final Question QUESTION = new Question("What is the capital of France?");
     private static final List<Document> CONTEXT = List.of(new Document("Paris is the capital of France."));
     private static final Answer ANSWER = new Answer("Paris.");
@@ -726,6 +727,55 @@ class OllamaJudgeTest {
         warmJudge.evaluateRetrieval(QUESTION, CONTEXT);
 
         assertThat(capturedBody.get()).contains("\"temperature\":0.7");
+    }
+
+    // --- seed ---
+
+    @Test
+    void should_omitSeed_when_notConfigured() {
+        AtomicReference<String> capturedBody = new AtomicReference<>();
+        String json = "{\"score\": 0.9, \"rationale\": \"OK.\", \"statements\": []}";
+        registerCapturingHandler(ollamaJsonResponse(json), capturedBody);
+
+        judge().evaluateRetrieval(QUESTION, CONTEXT);
+
+        assertThat(capturedBody.get()).doesNotContain("seed");
+    }
+
+    @Test
+    void should_sendSeed_when_configuredViaBuilder() {
+        AtomicReference<String> capturedBody = new AtomicReference<>();
+        String json = "{\"score\": 0.9, \"rationale\": \"OK.\", \"statements\": []}";
+        registerCapturingHandler(ollamaJsonResponse(json), capturedBody);
+
+        OllamaJudge seededJudge = OllamaJudge.builder()
+                .model(MODEL)
+                .host("localhost")
+                .port(port)
+                .seed(SEED)
+                .build();
+
+        seededJudge.evaluateRetrieval(QUESTION, CONTEXT);
+
+        assertThat(capturedBody.get()).contains("\"seed\":42");
+    }
+
+    @Test
+    void should_sendSeed_when_configuredWithZero() {
+        AtomicReference<String> capturedBody = new AtomicReference<>();
+        String json = "{\"score\": 0.9, \"rationale\": \"OK.\", \"statements\": []}";
+        registerCapturingHandler(ollamaJsonResponse(json), capturedBody);
+
+        OllamaJudge seededJudge = OllamaJudge.builder()
+                .model(MODEL)
+                .host("localhost")
+                .port(port)
+                .seed(0)
+                .build();
+
+        seededJudge.evaluateRetrieval(QUESTION, CONTEXT);
+
+        assertThat(capturedBody.get()).contains("\"seed\":0");
     }
 
     // --- custom templates honored for all metrics ---

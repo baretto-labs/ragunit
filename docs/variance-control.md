@@ -74,6 +74,33 @@ OllamaJudge judge = OllamaJudge.builder()
 
 ---
 
+## `seed(n)` — replay the same measurement
+
+Temperature 0 makes the sampling greedy; it does not fix the seed Ollama draws for
+each request. Two identical runs can therefore still diverge. Set a seed when a score
+has to be **comparable to itself over time** — a baseline captured before a change and
+re-measured after it:
+
+```java
+OllamaJudge judge = OllamaJudge.builder()
+        .model("qwen2.5:14b")
+        .seed(42)           // same prompt, same model, same seed → same verdict
+        .build();
+```
+
+No seed is sent unless you set one, so the default behaviour is unchanged.
+
+A seed only holds the judge still. It does not make two models comparable, and it does
+not survive a model upgrade or a prompt edit: both invalidate a baseline exactly as
+changing the seed would. Record the model, the prompt version, and the seed alongside
+every score you intend to compare later.
+
+!!! warning
+    A seed narrows the variance, it does not remove it — the GPU and batching caveat
+    above still applies. Keep `withRuns(n)` for anything that gates a decision.
+
+---
+
 ## How many runs?
 
 | Runs | Use case |
